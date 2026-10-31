@@ -1,0 +1,21 @@
+{
+  "sourceName": "本地示例 · 东京一日攻略",
+  "sourceUrl": "",
+  "sourceText": "东京一日路线示例：上午游览浅草寺和隅田公园，中午前往上野公园，下午逛阿美横丁，傍晚到东京站。",
+  "tripTitle": "东京的一天",
+  "destination": "东京",
+  "days": [
+    {
+      "date": "第 1 天",
+      "title": "浅草、上野与东京站",
+      "summary": "从下町寺院与河岸出发，经上野一路走到丸之内。",
+      "stops": [
+        {"name":"浅草寺","time":"09:00","category":"寺院","note":"从雷门慢慢走进仲见世通。","latitude":35.7148,"longitude":139.7967},
+        {"name":"隅田公园","time":"10:30","category":"散步","note":"沿河散步，出发前确认天气。","latitude":35.7133,"longitude":139.8034},
+        {"name":"上野公园","time":"12:00","category":"公园","note":"想看博物馆，请先确认开放情况。","latitude":35.7146,"longitude":139.7732},
+        {"name":"阿美横丁","time":"14:00","category":"逛街","note":"午餐和购物可以放在这一段。","latitude":35.7091,"longitude":139.7741},
+        {"name":"东京站","time":"16:00","category":"交通","note":"换乘与找出口都预留些时间。","latitude":35.6812,"longitude":139.7671}
+      ]
+    }
+  ]
+}
