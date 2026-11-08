@@ -24,6 +24,7 @@ jobs:
           if-no-files-found: error
       - name: Write release notes
         run: |
+          cat > "$GITHUB_WORKSPACE/release-notes.md" <<'NOTES'
           GoJapan Android 1.0 测试版。
           
           - 应用包名：com.gojapan；versionName：1.0；versionCode：1。
