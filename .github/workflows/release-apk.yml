@@ -2,7 +2,7 @@ name: Build APK for release
 on:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -22,3 +22,25 @@ jobs:
           name: GoJapan-1.0-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Write release notes
+        run: |
+          GoJapan Android 1.0 测试版。
+          
+          - 应用包名：com.gojapan；versionName：1.0；versionCode：1。
+          - 系统要求：Android 8.0（API 26）及以上。
+          - 安装附件 GoJapan-1.0.apk 即可体验。
+          - 此 APK 为 debug 构建，使用调试签名，供测试体验；不是使用正式发布证书签名的生产版本。
+          - 未注入 DeepSeek 或 Google Maps 私有 API 密钥，相关在线功能依赖后续配置。
+          - 发布前执行 testDebugUnitTest、lintDebug、assembleDebug。
+          
+          构建记录：https://github.com/maxpup/gojapan/actions/runs/${{ github.run_id }}
+          NOTES
+      - name: Publish APK 1.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          cp app/build/outputs/apk/debug/app-debug.apk release/GoJapan-1.0.apk
+          cd release
+          sha256sum GoJapan-1.0.apk > SHA256SUMS.txt
+          gh release create v1.0 GoJapan-1.0.apk SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "GoJapan 1.0（测试版）" --prerelease --notes-file "$GITHUB_WORKSPACE/release-notes.md"
