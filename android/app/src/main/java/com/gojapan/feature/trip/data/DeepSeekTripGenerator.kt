@@ -80,6 +80,7 @@ class DeepSeekTripGenerator @Inject constructor() {
         val SYSTEM_PROMPT = """
             你是日本旅行规划助手。只输出合法 json，不要 Markdown。输出必须完全符合：
             {"tripTitle":"名称","destination":"城市","days":[{"date":"第 1 天","title":"主题","summary":"摘要","stops":[{"name":"地点","time":"09:00","category":"景点","note":"来自攻略的提示","latitude":35.0,"longitude":139.0}]}]}
+            根对象和每天的对象都需添加 precautions（注意事项字符串数组）和 packingItems（必带物品字符串数组），同时添加 foodRecommendations（美食推荐字符串数组，每项包含攻略中明确提及的餐食或餐厅及用餐提示）。仅提取攻略明确提及的内容，没有则返回空数组，不编造店名或营业信息。
             保留攻略事实，按合理地理顺序整理；攻略没有的信息不要编造。days 和 stops 必须是非空数组。
         """.trimIndent()
     }

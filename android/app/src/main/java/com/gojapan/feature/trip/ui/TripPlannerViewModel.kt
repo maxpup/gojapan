@@ -17,9 +17,10 @@ import kotlinx.coroutines.launch
 
 data class TripPlannerUiState(
     val plan: TripPlan? = null,
-    val selectedDay: Int = 0,
+    val selectedDay: Int = -1,
     val selectedStop: Int = 0,
     val isGenerating: Boolean = false,
+    val isSaving: Boolean = false,
     val message: String? = null,
     val mapProvider: TripMapProvider = TripMapProvider.GOOGLE,
 )
@@ -50,17 +51,35 @@ class TripPlannerViewModel @Inject constructor(
         _state.update { it.copy(mapProvider = provider) }
     }
 
+    suspend fun saveEditedPlan(plan: TripPlan): Boolean {
+        if (_state.value.isSaving || _state.value.isGenerating || plan.editValidationError() != null) return false
+        _state.update { it.copy(isSaving = true) }
+        return try {
+            repository.save(plan)
+            _state.update {
+                it.copy(plan = plan, selectedDay = it.selectedDay.takeIf { index -> index in plan.days.indices } ?: -1, selectedStop = 0)
+            }
+            true
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        } finally {
+            _state.update { it.copy(isSaving = false) }
+        }
+    }
+
     fun saveSourceAndGenerate(sourceText: String) {
+        if (_state.value.isGenerating || _state.value.isSaving) return
         val current = _state.value.plan ?: return
+        _state.update { it.copy(isGenerating = true, message = null) }
         viewModelScope.launch {
-            _state.update { it.copy(isGenerating = true, message = null) }
             runCatching {
                 repository.saveSourceText(sourceText)
-                generator.generate(sourceText, current.sourceName, current.sourceUrl)
+                generator.generate(sourceText, current.sourceName, current.sourceUrl).also { repository.save(it) }
             }.onSuccess { plan ->
-                repository.save(plan)
                 _state.update {
-                    it.copy(plan = plan, selectedDay = 0, selectedStop = 0, isGenerating = false, message = "新行程已生成并保存到本机")
+                    it.copy(plan = plan, selectedDay = -1, selectedStop = 0, isGenerating = false, message = "新行程已生成并保存到本机")
                 }
             }.onFailure { error ->
                 _state.update { it.copy(isGenerating = false, message = error.message ?: "生成失败，请重试") }

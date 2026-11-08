@@ -10,6 +10,9 @@ data class TripPlan(
     val tripTitle: String,
     val destination: String,
     val days: List<TripDay>,
+    val precautions: List<String> = emptyList(),
+    val packingItems: List<String> = emptyList(),
+    val foodRecommendations: List<String> = emptyList(),
 )
 
 @Serializable
@@ -18,6 +21,9 @@ data class TripDay(
     val title: String,
     val summary: String,
     val stops: List<TripStop>,
+    val precautions: List<String> = emptyList(),
+    val packingItems: List<String> = emptyList(),
+    val foodRecommendations: List<String> = emptyList(),
 )
 
 @Serializable

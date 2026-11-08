@@ -13,5 +13,20 @@ class TripPlanTest {
         )
         assertEquals("浅草寺", plan.days.single().stops.single().name)
         assertNull(plan.days.single().stops.single().latitude)
+        assertEquals(emptyList<String>(), plan.foodRecommendations)
+        assertEquals(emptyList<String>(), plan.days.single().foodRecommendations)
+        assertEquals(emptyList<String>(), plan.precautions)
+        assertEquals(emptyList<String>(), plan.days.single().packingItems)
+    }
+    @Test
+    fun `trip preparation survives persistence`() {
+        val plan = TripPlan(
+            tripTitle = "日本东京之旅", destination = "东京",
+            precautions = listOf("确认天气"), packingItems = listOf("雨具"),
+            foodRecommendations = listOf("午餐：拉面"),
+            days = listOf(TripDay("第 1 天", "散步", "慢游", emptyList(),
+                precautions = listOf("预留休息时间"), packingItems = listOf("饮用水"), foodRecommendations = listOf("晚餐：寿司"))),
+        )
+        assertEquals(plan, Json.decodeFromString<TripPlan>(Json.encodeToString(TripPlan.serializer(), plan)))
     }
 }
