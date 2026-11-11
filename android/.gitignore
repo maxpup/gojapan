@@ -14,3 +14,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Signing secrets must never enter source control
+*.jks
+*.keystore
+*.p12
+*signing-credentials*.json
+__pycache__/

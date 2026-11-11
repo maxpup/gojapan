@@ -7,6 +7,15 @@ plugins {
   alias(libs.plugins.secrets.gradle.plugin)
 }
 
+val fixedStoreFile = providers.environmentVariable("GOJAPAN_SIGNING_STORE_FILE").orNull
+val fixedStorePassword = providers.environmentVariable("GOJAPAN_SIGNING_STORE_PASSWORD").orNull
+val fixedKeyAlias = providers.environmentVariable("GOJAPAN_SIGNING_KEY_ALIAS").orNull
+val fixedKeyPassword = providers.environmentVariable("GOJAPAN_SIGNING_KEY_PASSWORD").orNull
+val fixedSigningReady = listOf(fixedStoreFile, fixedStorePassword, fixedKeyAlias, fixedKeyPassword).all { !it.isNullOrBlank() }
+if (providers.environmentVariable("GOJAPAN_REQUIRE_FIXED_SIGNING").orNull == "true" && !fixedSigningReady) {
+    error("Fixed GoJapan signing credentials are required; refusing to generate a temporary signing key.")
+}
+
 android {
     namespace = "com.gojapan"
     compileSdk = 36
@@ -14,16 +23,30 @@ android {
         applicationId = "com.gojapan"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("goJapanFixed") {
+            if (fixedSigningReady) {
+                storeFile = file(checkNotNull(fixedStoreFile))
+                storePassword = fixedStorePassword
+                keyAlias = fixedKeyAlias
+                keyPassword = fixedKeyPassword
+                storeType = "PKCS12"
+            }
+        }
     }
 
     buildTypes {
         debug {
+            if (fixedSigningReady) signingConfig = signingConfigs.getByName("goJapanFixed")
             buildConfigField("boolean", "ENABLE_TTS_FALLBACK", "true")
         }
         release {
+            signingConfig = signingConfigs.getByName("goJapanFixed")
             isMinifyEnabled = true
             isShrinkResources = true
             buildConfigField("boolean", "ENABLE_TTS_FALLBACK", "false")

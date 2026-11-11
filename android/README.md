@@ -22,7 +22,11 @@ Google Cloud 项目需启用 **Maps SDK for Android**，并将密钥限制为 An
 ## 本地验证
 
 ```bash
-./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease
+./gradlew lintDebug testDebugUnitTest assembleDebug compileReleaseKotlin
 ```
 
 M0 包含单 Activity 应用壳、固定顺序的四个主 Tab、KANA LINK 占位首页、手机底部导航和平板侧边导航。业务数据、游戏和 Room 从 M1 开始实现。
+
+## 固定发布签名
+
+发布必须使用 [SIGNING.md](SIGNING.md) 中登记的固定证书和签名构建脚本；release 不再允许临时签名或无签名发布。私钥与密码不得提交到仓库。
