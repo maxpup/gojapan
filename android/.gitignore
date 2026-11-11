@@ -21,3 +21,4 @@ local.properties
 *.p12
 *signing-credentials*.json
 __pycache__/
+/.kotlin/
