@@ -37,17 +37,17 @@ jobs:
           python3 tools/build-signed.py testDebugUnitTest lintDebug assembleDebug assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: GoJapan-1.0.2-signed-apk
+          name: GoJapan-1.0.3-signed-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
       - name: Prepare release
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/GoJapan-1.0.2.apk
+          cp app/build/outputs/apk/release/app-release.apk release/GoJapan-1.0.3.apk
           cd release
-          sha256sum GoJapan-1.0.2.apk > SHA256SUMS.txt
+          sha256sum GoJapan-1.0.3.apk > SHA256SUMS.txt
           cat > "$GITHUB_WORKSPACE/release-notes.md" <<'NOTES'
-          GoJapan Android 1.0.2 测试版，versionCode=3，Android 8.0 及以上。
+          GoJapan Android 1.0.3 测试版，versionCode=4，Android 8.0 及以上。
 
           使用固定签名，兼容 v1.0-fixes-20261111 的新版证书；不兼容最早 v1.0 的临时签名。
           发布前验证单元测试、Lint、debug/release 构建及 APK 证书指纹。
@@ -56,4 +56,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v1.0.2 release/GoJapan-1.0.2.apk release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "GoJapan 1.0.2（固定签名测试版）" --prerelease --notes-file "$GITHUB_WORKSPACE/release-notes.md"
+          gh release create v1.0.3 release/GoJapan-1.0.3.apk release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "GoJapan 1.0.3（固定签名测试版）" --prerelease --notes-file "$GITHUB_WORKSPACE/release-notes.md"

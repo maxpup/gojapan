@@ -4,15 +4,12 @@ import com.gojapan.app.preview.GoJapanPreview
 import com.gojapan.app.preview.GoJapanPreviews
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.foundation.layout.Arrangement
@@ -345,28 +342,21 @@ private fun InlineNoteCard(
 @Composable
 private fun TripHeader(plan: TripPlan, selectedDay: Int, onSelectDay: (Int) -> Unit, canEdit: Boolean, onEdit: () -> Unit) {
     Column {
-        Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-            color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(28.dp),
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("旅の記録  /  TRAVEL NOTES", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(plan.tripTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                    }
-                    TripMascot()
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${plan.days.size} 天慢慢逛 · ${plan.days.sumOf { it.stops.size }} 个地点",
-                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = onEdit, enabled = canEdit) {
-                        Text("更多编辑", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
+            Text(
+                plan.tripTitle,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            TextButton(onClick = onEdit, enabled = canEdit) {
+                Text("更多编辑", style = MaterialTheme.typography.labelSmall)
             }
         }
         Row(
@@ -394,19 +384,6 @@ private fun TripTab(label: String, selected: Boolean, onClick: () -> Unit) {
         Text(label, style = MaterialTheme.typography.labelLarge,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun TripMascot() {
-    val yellow = MaterialTheme.colorScheme.primaryContainer
-    val paper = MaterialTheme.colorScheme.background
-    val ink = MaterialTheme.colorScheme.onSurface
-    Canvas(Modifier.size(68.dp)) {
-        drawOval(yellow, topLeft = Offset(size.width * .18f, size.height * .35f), size = Size(size.width * .82f, size.height * .62f))
-        drawOval(paper, topLeft = Offset(0f, 0f), size = Size(size.width * .85f, size.height * .76f))
-        drawOval(ink, topLeft = Offset(size.width * .32f, size.height * .28f), size = Size(size.width * .065f, size.height * .10f))
-        drawOval(ink, topLeft = Offset(size.width * .47f, size.height * .28f), size = Size(size.width * .065f, size.height * .10f))
     }
 }
 
