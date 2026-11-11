@@ -16,32 +16,44 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew testDebugUnitTest lintDebug assembleDebug
+      - name: Build with the fixed signing key
+        env:
+          GOJAPAN_SIGNING_KEYSTORE_BASE64: ${{ secrets.GOJAPAN_SIGNING_KEYSTORE_BASE64 }}
+          GOJAPAN_SIGNING_STORE_PASSWORD: ${{ secrets.GOJAPAN_SIGNING_STORE_PASSWORD }}
+          GOJAPAN_SIGNING_KEY_ALIAS: ${{ secrets.GOJAPAN_SIGNING_KEY_ALIAS }}
+          GOJAPAN_SIGNING_KEY_PASSWORD: ${{ secrets.GOJAPAN_SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${GOJAPAN_SIGNING_KEYSTORE_BASE64:?Missing fixed signing key; refusing temporary signing}"
+          export GOJAPAN_SIGNING_STORE_FILE="$RUNNER_TEMP/gojapan-fixed.p12"
+          trap 'rm -f "$GOJAPAN_SIGNING_STORE_FILE"' EXIT
+          python3 - <<'PY'
+          import os, base64
+          from pathlib import Path
+          path = Path(os.environ['GOJAPAN_SIGNING_STORE_FILE'])
+          path.write_bytes(base64.b64decode(os.environ['GOJAPAN_SIGNING_KEYSTORE_BASE64'], validate=True))
+          path.chmod(0o600)
+          PY
+          python3 tools/build-signed.py testDebugUnitTest lintDebug assembleDebug assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: GoJapan-1.0-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: GoJapan-1.0.1-signed-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-      - name: Write release notes
+      - name: Prepare release
         run: |
+          mkdir -p release
+          cp app/build/outputs/apk/release/app-release.apk release/GoJapan-1.0.1.apk
+          cd release
+          sha256sum GoJapan-1.0.1.apk > SHA256SUMS.txt
           cat > "$GITHUB_WORKSPACE/release-notes.md" <<'NOTES'
-          GoJapan Android 1.0 测试版。
-          
-          - 应用包名：com.gojapan；versionName：1.0；versionCode：1。
-          - 系统要求：Android 8.0（API 26）及以上。
-          - 安装附件 GoJapan-1.0.apk 即可体验。
-          - 此 APK 为 debug 构建，使用调试签名，供测试体验；不是使用正式发布证书签名的生产版本。
-          - 未注入 DeepSeek 或 Google Maps 私有 API 密钥，相关在线功能依赖后续配置。
-          - 发布前执行 testDebugUnitTest、lintDebug、assembleDebug。
-          
-          构建记录：https://github.com/maxpup/gojapan/actions/runs/${{ github.run_id }}
+          GoJapan Android 1.0.1 测试版，versionCode=2，Android 8.0 及以上。
+
+          使用固定签名，兼容 v1.0-fixes-20261111 的新版证书；不兼容最早 v1.0 的临时签名。
+          发布前验证单元测试、Lint、debug/release 构建及 APK 证书指纹。
           NOTES
-      - name: Publish APK 1.0
+      - name: Publish signed APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p release
-          cp app/build/outputs/apk/debug/app-debug.apk release/GoJapan-1.0.apk
-          cd release
-          sha256sum GoJapan-1.0.apk > SHA256SUMS.txt
-          gh release create v1.0 GoJapan-1.0.apk SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "GoJapan 1.0（测试版）" --prerelease --notes-file "$GITHUB_WORKSPACE/release-notes.md"
+          gh release create v1.0.1 release/GoJapan-1.0.1.apk release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "GoJapan 1.0.1（固定签名测试版）" --prerelease --notes-file "$GITHUB_WORKSPACE/release-notes.md"

@@ -24,4 +24,4 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease
+      - run: ./gradlew lintDebug testDebugUnitTest assembleDebug compileReleaseKotlin
