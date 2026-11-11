@@ -1,6 +1,6 @@
 # 日语播放修复（issue #6）
 
-实现：Android 11+ 声明 TTS 引擎查询；搜索整句、逐假名、场景听力以及假名开发 fallback 共用 JapaneseSpeaker。初始化完成后验证日语语言和已安装的离线日语 voice，缺失时不回退到中文。搜索和场景的 audio_play 结果来自 UtteranceProgressListener，而非 speak 的入队结果。取消/替换请求不计播放成功。退出页面释放引擎，场景切题停止旧请求。
+实现：Android 11+ 声明 TTS 引擎查询；搜索整句、逐假名、场景听力以及假名开发 fallback 共用 JapaneseSpeaker。初始化完成后验证日语语言与当前语音（优先离线、兼容联网及旧式语言接口），缺失时不回退到中文。搜索和场景的 audio_play 结果来自 UtteranceProgressListener，而非 speak 的入队结果。取消/替换请求不计播放成功。退出页面释放引擎，场景切题停止旧请求。
 
 恢复：初始化失败/超时、缺少日语包显示安装和重新初始化操作；已就绪时显示停止按钮，播放失败可再次点击播放。内置假名音频缺失/损坏时，debug 使用同一日语策略降级，release 显示重新安装提示。
 
@@ -20,10 +20,10 @@
 | 各假名入口 | 假名点读、游戏、练习、复习 | 内置录音可播放 |
 | 真人听音 | ホテル、タクシー、コーヒー、チケット、含汉字整句，以及拗音 | 发音为日语；长音、促音、拗音准确 |
 
-## 本轮自动检查
+## 首轮自动检查（后续版本另见兼容修复记录）
 
 - `git diff --check` 通过。
-- 已添加 `JapaneseVoicePolicyTest`：允许已安装的离线日语 voice，拒绝中文/英文 voice、需联网 voice 和未安装 voice。
+- 语音策略已在 1.0.2 扩展：不再因联网或未实现 voice 枚举而直接拒绝已确认的日语，继续拒绝中文/英文及明确未安装语音。详见 `TTS_COMPATIBILITY_1_0_2.md`。
 - 初次构建因缺少 Android SDK 失败；2026-11-10 已在当前工作区安装 Android API 36、Build Tools 36.0.0、platform-tools 和 Temurin JDK 17，并配置代理与系统 CA 信任库。
 - `testDebugUnitTest assembleDebug lintDebug assembleRelease` 全部通过，80 项单元测试，0 失败、0 错误、0 跳过；包含新增的 3 项语音策略测试。
 - Debug Lint：0 errors、53 warnings、1 hint；release 关键 Lint 通过。
