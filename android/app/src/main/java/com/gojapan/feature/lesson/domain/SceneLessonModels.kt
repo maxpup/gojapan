@@ -26,6 +26,7 @@ data class SceneLesson(
     val expressions: List<TravelExpression>,
 )
 
+@kotlinx.serialization.Serializable
 data class LessonQuestion(
     val id: String,
     val expressionId: String,
@@ -38,6 +39,7 @@ data class LessonQuestion(
     val isChallenge: Boolean = false,
 )
 
+@kotlinx.serialization.Serializable
 data class LessonItemEvidence(
     val expressionId: String,
     val firstTryCorrect: Boolean? = null,

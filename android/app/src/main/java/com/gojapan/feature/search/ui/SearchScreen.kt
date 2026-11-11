@@ -1,6 +1,7 @@
 package com.gojapan.feature.search.ui
 
-import android.speech.tts.TextToSpeech
+import com.gojapan.core.audio.rememberJapaneseSpeaker
+import com.gojapan.core.audio.JapanesePlaybackStatus
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,14 +26,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.gojapan.feature.search.domain.TravelExpression
 import com.gojapan.feature.search.domain.TravelExpressionSearch
 import com.gojapan.feature.library.ui.TravelLibraryViewModel
-import java.util.Locale
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -55,14 +53,10 @@ fun SearchScreen(
             libraryViewModel.recordSearchSubmit(query, results.size)
         }
     }
-    val context = LocalContext.current
-    val speaker = remember { TextToSpeech(context.applicationContext) { } }
-    DisposableEffect(speaker) {
-        speaker.language = Locale.JAPAN
-        onDispose { speaker.shutdown() }
-    }
+    val speaker = rememberJapaneseSpeaker()
 
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        JapanesePlaybackStatus(speaker)
         Text("旅行日语速查", style = MaterialTheme.typography.headlineSmall)
         Text("输入中文、常见说法或日语，快速找到现场表达", style = MaterialTheme.typography.bodyMedium)
         OutlinedTextField(
@@ -104,6 +98,7 @@ fun SearchScreen(
                     ExpressionCard(
                         expression = expression,
                         showRomaji = showRomaji,
+                        audioReady = speaker.ready,
                         isFavorite = expression.id in library.favoriteIds,
                         inReview = expression.id in library.reviewIds,
                         onToggleFavorite = {
@@ -113,16 +108,16 @@ fun SearchScreen(
                         },
                         onToggleReview = { libraryViewModel.toggleReview(expression.id) },
                         onKanaSpeak = { kana, index ->
-                            speaker.stop()
-                            val result = speaker.speak(kana, TextToSpeech.QUEUE_FLUSH, null, "${expression.id}-kana-$index")
-                            libraryViewModel.recordAudioPlay("search_kana", "${expression.id}:$index", result == TextToSpeech.SUCCESS)
+                            speaker.speak(kana) { success ->
+                                libraryViewModel.recordAudioPlay("search_kana", "${expression.id}:$index", success)
+                            }
                         },
                     ) {
                         libraryViewModel.recordSearchResult(expression.id)
                         libraryViewModel.recordSearchClick(expression.id, rank)
-                        speaker.stop()
-                        val result = speaker.speak(expression.japanese, TextToSpeech.QUEUE_FLUSH, null, expression.id)
-                        libraryViewModel.recordAudioPlay("search", expression.id, result == TextToSpeech.SUCCESS)
+                        speaker.speak(expression.japanese) { success ->
+                            libraryViewModel.recordAudioPlay("search", expression.id, success)
+                        }
                     }
                 }
             }
@@ -134,6 +129,7 @@ fun SearchScreen(
 private fun ExpressionCard(
     expression: TravelExpression,
     showRomaji: Boolean,
+    audioReady: Boolean,
     isFavorite: Boolean,
     inReview: Boolean,
     onToggleFavorite: () -> Unit,
@@ -148,20 +144,13 @@ private fun ExpressionCard(
                 Text("${expression.scene} · ${expression.politeness}", style = MaterialTheme.typography.labelMedium)
             }
             Text(expression.kana, style = MaterialTheme.typography.bodyLarge)
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                expression.kana.filterNot(Char::isWhitespace).forEachIndexed { index, kana ->
-                    AssistChip(onClick = { onKanaSpeak(kana.toString(), index) }, label = { Text(kana.toString()) })
-                }
-            }
-            Text("点击单个假名可逐字点读", style = MaterialTheme.typography.labelSmall)
+            ExpressionLearningContent(expression, audioReady) { word -> onKanaSpeak(word, -1) }
             if (showRomaji) Text(expression.romaji, style = MaterialTheme.typography.bodySmall)
             Text(expression.chinese, style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = onSpeak,
+                    enabled = audioReady,
                     modifier = Modifier.semantics { contentDescription = "播放${expression.japanese}的日语发音" },
                 ) { Text("▶ 播放") }
                 Button(onClick = onToggleFavorite) { Text(if (isFavorite) "★ 已收藏" else "☆ 收藏") }

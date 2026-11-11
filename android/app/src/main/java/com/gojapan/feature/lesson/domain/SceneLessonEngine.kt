@@ -1,5 +1,6 @@
 package com.gojapan.feature.lesson.domain
 
+@kotlinx.serialization.Serializable
 data class LessonEngineState(
     val questions: List<LessonQuestion>,
     val currentIndex: Int = 0,
@@ -12,6 +13,11 @@ data class LessonEngineState(
     val challengeAnswered: Int = 0,
     val completed: Boolean = false,
 ) {
+    val answeredCount: Int get() = (currentIndex + if (selectedAnswer != null) 1 else 0).coerceAtMost(questions.size)
+    val progressQuestionCount: Int get() = questions.size + if (
+        selectedAnswer != null && lastAnswerCorrect == false && currentQuestion?.isRetry == false
+    ) 1 else 0
+    val completionFraction: Float get() = if (progressQuestionCount == 0) 0f else answeredCount.toFloat() / progressQuestionCount
     val currentQuestion: LessonQuestion? get() = questions.getOrNull(currentIndex)
     val initialAccuracy: Int get() = if (initialAnswered == 0) 0 else initialCorrect * 100 / initialAnswered
     val challengeAccuracy: Int get() = if (challengeAnswered == 0) 0 else challengeCorrect * 100 / challengeAnswered

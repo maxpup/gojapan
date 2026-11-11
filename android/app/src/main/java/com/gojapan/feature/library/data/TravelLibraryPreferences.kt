@@ -23,6 +23,8 @@ data class TravelLibraryState(
     val frequentWrongIds: Set<String> = emptySet(),
     val hiddenFrequentWrongIds: Set<String> = emptySet(),
     val completedLessonIds: Set<String> = emptySet(),
+    val learnedExpressionIds: Set<String> = emptySet(),
+    val lessonCheckpoint: com.gojapan.feature.lesson.domain.LessonCheckpoint? = null,
     val lessonBestScores: Map<String, Int> = emptyMap(),
 )
 
@@ -53,6 +55,8 @@ class TravelLibraryPreferences(
             hiddenFrequentWrongIds = hiddenWrong,
             completedLessonIds = values[COMPLETED_LESSONS].orEmpty(),
             lessonBestScores = lessonScores,
+            learnedExpressionIds = values[LEARNED_EXPRESSIONS].orEmpty() + answerHistory.keys,
+            lessonCheckpoint = com.gojapan.feature.lesson.domain.LessonCheckpointCodec.decode(values[LESSON_CHECKPOINT].orEmpty()),
         )
     }
 
@@ -108,6 +112,7 @@ class TravelLibraryPreferences(
             val history = AnswerHistoryCodec.decode(values[ANSWER_HISTORY].orEmpty()).toMutableMap()
             results.forEach { (id, answers) -> history[id] = (history[id].orEmpty() + answers).takeLast(5) }
             values[ANSWER_HISTORY] = AnswerHistoryCodec.encode(history)
+            values[LEARNED_EXPRESSIONS] = values[LEARNED_EXPRESSIONS].orEmpty() + results.keys
         }
     }
 
@@ -117,7 +122,52 @@ class TravelLibraryPreferences(
             val scores = LessonScoreCodec.decode(values[LESSON_SCORES].orEmpty()).toMutableMap()
             scores[lessonId] = maxOf(scores[lessonId] ?: 0, score)
             values[LESSON_SCORES] = LessonScoreCodec.encode(scores)
+            if (com.gojapan.feature.lesson.domain.LessonCheckpointCodec.decode(values[LESSON_CHECKPOINT].orEmpty())?.lessonId == lessonId) {
+                values.remove(LESSON_CHECKPOINT)
+            }
             if (passed) values[COMPLETED_LESSONS] = values[COMPLETED_LESSONS].orEmpty() + lessonId
+        }
+    }
+
+    /** Commit results, review enrollment, score and checkpoint removal as one durable transaction. */
+    suspend fun finishLessonSession(
+        lessonId: String,
+        sessionId: String,
+        results: Map<String, List<Boolean>>,
+        score: Int,
+        passed: Boolean,
+        reinforcement: Boolean,
+    ) {
+        require(sessionId.isNotBlank() && lessonId.isNotBlank() && score in 0..100)
+        dataStore.edit { values ->
+            val receipts = values[FINISHED_SESSIONS].orEmpty()
+            if (sessionId in receipts) return@edit
+            val ids = results.keys
+            values[REVIEW_IDS] = values[REVIEW_IDS].orEmpty() + ids
+            val memory = TravelMemoryCodec.decode(values[MEMORY].orEmpty()).toMutableMap()
+            ids.forEach { id -> memory.putIfAbsent(id, TravelMemoryState(id, nextReviewAt = clock.millis())) }
+            values[MEMORY] = TravelMemoryCodec.encode(memory)
+            val history = AnswerHistoryCodec.decode(values[ANSWER_HISTORY].orEmpty()).toMutableMap()
+            results.forEach { (id, answers) -> history[id] = (history[id].orEmpty() + answers).takeLast(5) }
+            values[ANSWER_HISTORY] = AnswerHistoryCodec.encode(history)
+            values[LEARNED_EXPRESSIONS] = values[LEARNED_EXPRESSIONS].orEmpty() + ids
+            if (!reinforcement) {
+                val scores = LessonScoreCodec.decode(values[LESSON_SCORES].orEmpty()).toMutableMap()
+                scores[lessonId] = maxOf(scores[lessonId] ?: 0, score)
+                values[LESSON_SCORES] = LessonScoreCodec.encode(scores)
+                if (passed) values[COMPLETED_LESSONS] = values[COMPLETED_LESSONS].orEmpty() + lessonId
+            }
+            val checkpoint = com.gojapan.feature.lesson.domain.LessonCheckpointCodec.decode(values[LESSON_CHECKPOINT].orEmpty())
+            if (checkpoint?.sessionId == sessionId) values.remove(LESSON_CHECKPOINT)
+            values[FINISHED_SESSIONS] = receipts.toList().takeLast(63).toSet() + sessionId
+        }
+    }
+
+    suspend fun saveLessonCheckpoint(checkpoint: com.gojapan.feature.lesson.domain.LessonCheckpoint) {
+        dataStore.edit { values ->
+            if (checkpoint.sessionId !in values[FINISHED_SESSIONS].orEmpty()) {
+                values[LESSON_CHECKPOINT] = com.gojapan.feature.lesson.domain.LessonCheckpointCodec.encode(checkpoint)
+            }
         }
     }
 
@@ -139,6 +189,9 @@ class TravelLibraryPreferences(
 
     private companion object {
         const val FREQUENT_THRESHOLD = 2
+        val FINISHED_SESSIONS = stringSetPreferencesKey("finished_lesson_sessions_v1")
+        val LESSON_CHECKPOINT = stringPreferencesKey("lesson_checkpoint_v1")
+        val LEARNED_EXPRESSIONS = stringSetPreferencesKey("learned_expression_ids")
         val FAVORITES = stringSetPreferencesKey("favorite_expression_ids")
         val REVIEW_IDS = stringSetPreferencesKey("review_expression_ids")
         val HIDDEN_FREQUENT = stringSetPreferencesKey("hidden_frequent_search_ids")

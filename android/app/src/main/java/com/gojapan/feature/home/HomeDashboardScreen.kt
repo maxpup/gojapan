@@ -71,6 +71,9 @@ fun HomeDashboardScreen(
             Text(HomeDashboardViewModel.primaryKanaLabel(state.profile, state.kanaExplored))
         }
         ProgressCard("旅游场景关卡", state.sceneLessonsCompleted, SceneLessonCatalogSize)
+        Text("已学表达 ${state.learnedExpressions} · 掌握表达 ${state.masteredExpressions}")
+        Text("已学：完成关卡答题的表达；掌握：复习达到第 3 级，收藏或播放不计入。", style = MaterialTheme.typography.bodySmall)
+        if (state.hasResumableLesson) Button(onClick = onLearn) { Text("继续上次学习（进入场景目录）") }
         state.recommendedLesson?.let { lesson ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

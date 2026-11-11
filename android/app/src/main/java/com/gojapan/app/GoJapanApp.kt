@@ -1,6 +1,7 @@
 package com.gojapan.app
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,7 +44,15 @@ import com.gojapan.feature.home.HomeDashboardRoute
 import com.gojapan.feature.trip.ui.TripPlannerRoute
 
 @Composable
-fun GoJapanApp(
+fun GoJapanApp(modifier: Modifier = Modifier, kanaLinkContent: (@Composable () -> Unit)? = null) {
+    androidx.compose.foundation.layout.Column(modifier.fillMaxSize().statusBarsPadding()) {
+        com.gojapan.core.audio.GlobalAudioControl()
+        GoJapanAppContent(Modifier.weight(1f), kanaLinkContent)
+    }
+}
+
+@Composable
+private fun GoJapanAppContent(
     modifier: Modifier = Modifier,
     kanaLinkContent: (@Composable () -> Unit)? = null,
 ) {

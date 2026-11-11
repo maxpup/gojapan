@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import com.gojapan.core.analytics.AnalyticsTracker
-import com.gojapan.BuildConfig
 import java.time.Clock
 
 enum class LessonPhase { CATALOG, PREVIEW, PLAYING, RESULT }
@@ -28,6 +27,8 @@ data class SceneLessonUiState(
     val phase: LessonPhase = LessonPhase.CATALOG,
     val lesson: SceneLesson? = null,
     val engine: LessonEngineState? = null,
+    val completedLessonIds: Set<String> = emptySet(),
+    val checkpoint: com.gojapan.feature.lesson.domain.LessonCheckpoint? = null,
     val orderedScenes: List<TravelScene> = TravelScene.entries,
 )
 
@@ -41,9 +42,16 @@ class SceneLessonViewModel @Inject constructor(
     private val mutableState = MutableStateFlow(SceneLessonUiState())
     val state: StateFlow<SceneLessonUiState> = mutableState.asStateFlow()
     private var engine: SceneLessonEngine? = null
+    private var reinforcement = false
+    private var sessionId = java.util.UUID.randomUUID().toString()
     private var lessonStartedAt: Long = 0L
 
     init {
+        viewModelScope.launch {
+            library.state.collectLatest { libraryState ->
+                mutableState.update { it.copy(completedLessonIds = libraryState.completedLessonIds, checkpoint = libraryState.lessonCheckpoint) }
+            }
+        }
         viewModelScope.launch {
             profilePreferences.profile.collectLatest { profile ->
                 mutableState.update { it.copy(orderedScenes = LearningPathGenerator.orderedScenes(profile)) }
@@ -58,9 +66,12 @@ class SceneLessonViewModel @Inject constructor(
 
     fun startLesson() {
         val lesson = checkNotNull(mutableState.value.lesson)
+        reinforcement = false
+        sessionId = java.util.UUID.randomUUID().toString()
         engine = SceneLessonEngine(lesson)
         lessonStartedAt = clock.millis()
         mutableState.update { it.copy(phase = LessonPhase.PLAYING, engine = engine!!.start()) }
+        saveCheckpoint()
         viewModelScope.launch { analytics.track("lesson_start", mapOf(
             "scene" to lesson.scene.name, "lesson_id" to lesson.id, "difficulty" to "MVP",
         )) }
@@ -68,21 +79,26 @@ class SceneLessonViewModel @Inject constructor(
 
     fun replayAudio() {
         val current = checkNotNull(mutableState.value.engine)
-        val question = checkNotNull(current.currentQuestion)
         mutableState.update { it.copy(engine = engine!!.replayAudio(current)) }
+    }
+
+    fun recordAudioResult(success: Boolean) {
+        val question = mutableState.value.engine?.currentQuestion ?: return
         viewModelScope.launch { analytics.track("audio_play", mapOf(
             "entry" to "lesson", "content_id" to question.expressionId,
-            "success" to BuildConfig.ENABLE_TTS_FALLBACK,
+            "success" to success,
         )) }
     }
 
     fun answer(answer: String) {
         val current = checkNotNull(mutableState.value.engine)
         val question = checkNotNull(current.currentQuestion)
+        val lesson = checkNotNull(mutableState.value.lesson)
         val correct = answer == question.correctAnswer
         mutableState.update { it.copy(engine = engine!!.answer(current, answer)) }
+        saveCheckpoint()
         viewModelScope.launch { analytics.track("lesson_question_answer", mapOf(
-            "lesson_id" to checkNotNull(mutableState.value.lesson).id,
+            "lesson_id" to lesson.id,
             "question_type" to question.type.name,
             "content_id" to question.expressionId,
             "attempt" to if (question.isRetry) "retry" else "first",
@@ -95,24 +111,25 @@ class SceneLessonViewModel @Inject constructor(
         val current = checkNotNull(mutableState.value.engine)
         val next = engine!!.advance(current)
         mutableState.update { it.copy(phase = if (next.completed) LessonPhase.RESULT else LessonPhase.PLAYING, engine = next) }
+        if (!next.completed) saveCheckpoint()
         if (next.completed) {
-            val ids = checkNotNull(mutableState.value.lesson).expressions.mapTo(mutableSetOf()) { it.id }
+            val lesson = checkNotNull(mutableState.value.lesson)
+            val isReinforcement = reinforcement
+            val finishedSessionId = sessionId
+            val durationMs = clock.millis() - lessonStartedAt
             val results = next.evidence.mapValues { it.value.recentResults }
             viewModelScope.launch {
-                library.enrollReview(ids)
-                library.recordLessonResults(results)
-                library.recordLessonCompletion(
-                    checkNotNull(mutableState.value.lesson).id,
-                    minOf(next.initialAccuracy, next.challengeAccuracy),
-                    next.passed,
+                library.finishLessonSession(
+                    lesson.id, finishedSessionId, results,
+                    minOf(next.initialAccuracy, next.challengeAccuracy), next.passed, isReinforcement,
                 )
                 analytics.track("lesson_complete", mapOf(
-                    "scene" to checkNotNull(mutableState.value.lesson).scene.name,
-                    "lesson_id" to checkNotNull(mutableState.value.lesson).id,
+                    "scene" to lesson.scene.name,
+                    "lesson_id" to lesson.id,
                     "score" to next.initialAccuracy,
                     "challenge_score" to next.challengeAccuracy,
                     "passed" to next.passed,
-                    "duration_ms" to (clock.millis() - lessonStartedAt),
+                    "duration_ms" to durationMs,
                 ))
             }
         }
@@ -128,12 +145,34 @@ class SceneLessonViewModel @Inject constructor(
             title = "${lesson.title} · 薄弱强化",
             expressions = lesson.expressions.filter { it.id in weakIds }.ifEmpty { lesson.expressions },
         )
+        reinforcement = true
+        sessionId = java.util.UUID.randomUUID().toString()
+        lessonStartedAt = clock.millis()
         engine = SceneLessonEngine(retryLesson)
         mutableState.update { it.copy(phase = LessonPhase.PLAYING, lesson = retryLesson, engine = engine!!.start()) }
     }
 
+    fun resumeLesson() {
+        val checkpoint = mutableState.value.checkpoint ?: return
+        val lesson = SceneLessonCatalog.allLessons.firstOrNull { it.id == checkpoint.lessonId } ?: return
+        reinforcement = false
+        engine = SceneLessonEngine(lesson)
+        lessonStartedAt = checkpoint.startedAt
+        sessionId = checkpoint.sessionId
+        mutableState.update { it.copy(phase = LessonPhase.PLAYING, lesson = lesson, engine = checkpoint.state) }
+    }
+
+    private fun saveCheckpoint() {
+        if (reinforcement) return
+        val snapshot = mutableState.value
+        val checkpoint = com.gojapan.feature.lesson.domain.LessonCheckpoint(
+            snapshot.lesson?.id ?: return, snapshot.engine ?: return, lessonStartedAt, sessionId,
+        )
+        viewModelScope.launch { library.saveLessonCheckpoint(checkpoint) }
+    }
+
     fun backToCatalog() {
         engine = null
-        mutableState.update { SceneLessonUiState(orderedScenes = it.orderedScenes) }
+        mutableState.update { it.copy(phase = LessonPhase.CATALOG, lesson = null, engine = null) }
     }
 }

@@ -61,10 +61,6 @@ fun GameRoute(
         GameScreen(
             it,
             onSelect = { cardId ->
-                it.cards.singleOrNull { card -> card.id == cardId }
-                    ?.takeIf { card -> settings.voiceEnabled && card.side != CardSide.ROMAJI }
-                    ?.let { card -> it.items.singleOrNull { item -> item.id == card.kanaId } }
-                    ?.let(speak)
                 val before = viewModel.state.value
                 viewModel.select(cardId)
                 val after = viewModel.state.value
@@ -81,6 +77,12 @@ fun GameRoute(
             viewModel::shuffle,
             viewModel::retryComplete,
             onExit,
+            onSpeak = { cardId ->
+                it.cards.singleOrNull { card -> card.id == cardId }
+                    ?.takeIf { settings.voiceEnabled }
+                    ?.let { card -> it.items.singleOrNull { item -> item.id == card.kanaId } }
+                    ?.let(speak)
+            },
         )
     }
 }
@@ -93,6 +95,7 @@ fun GameScreen(
     onShuffle: () -> Unit,
     onRetry: () -> Unit,
     onExit: () -> Unit,
+    onSpeak: (String) -> Unit = {},
 ) {
     var showExitConfirmation by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -101,6 +104,7 @@ fun GameScreen(
             Text("${formatTime(state.elapsedSeconds)} · 连击 × ${state.combo}")
             Text("剩余 ${state.remainingPairs} 对")
         }
+        OutlinedButton(onClick = { state.selectedCardId?.let(onSpeak) }, enabled = state.selectedCardId != null) { Text("▶ 播放选中的假名（选卡不自动发声）") }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(160.dp),
             modifier = Modifier.weight(1f).padding(vertical = 12.dp),
