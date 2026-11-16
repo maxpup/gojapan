@@ -87,9 +87,9 @@ private fun KanaExerciseResult(state: KanaExerciseState, onRestart: () -> Unit, 
             val answers = state.answers.filter { it.dimension == dimension }
             Text("${dimensionLabel(dimension)}：${answers.count { it.correct }}/${answers.size}")
         }
-        Text("结果已按单个假名和能力维度保存，并安排下次复习。")
+        Text("结果已按单个假名和能力维度保存。")
         Button(onClick = onRestart) { Text(if (state.passed) "再练一轮" else "强化薄弱内容") }
-        OutlinedButton(onClick = onBack) { Text("返回首页") }
+        OutlinedButton(onClick = onBack) { Text("返回五十音") }
     }
 }
 

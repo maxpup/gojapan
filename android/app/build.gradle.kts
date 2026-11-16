@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -6,6 +8,11 @@ plugins {
   alias(libs.plugins.hilt)
   alias(libs.plugins.secrets.gradle.plugin)
 }
+
+val localAiKey = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}.getProperty("DEEPSEEK_API_KEY", "")
 
 android {
     namespace = "com.gojapan"
@@ -21,9 +28,11 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("String", "DEEPSEEK_API_KEY", "\"" + localAiKey.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
             buildConfigField("boolean", "ENABLE_TTS_FALLBACK", "true")
         }
         release {
+            buildConfigField("String", "DEEPSEEK_API_KEY", "\"\"")
             isMinifyEnabled = true
             isShrinkResources = true
             buildConfigField("boolean", "ENABLE_TTS_FALLBACK", "false")
@@ -59,6 +68,8 @@ kotlin {
 }
 
 dependencies {
+  implementation("com.google.android.libraries.places:places:4.3.1")
+  implementation("com.google.android.material:material:1.12.0")
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)
@@ -116,4 +127,5 @@ secrets {
     propertiesFileName = "local.properties"
     defaultPropertiesFileName = "local.defaults.properties"
     ignoreList.add("keyToIgnore")
+    ignoreList.add("DEEPSEEK_API_KEY")
 }

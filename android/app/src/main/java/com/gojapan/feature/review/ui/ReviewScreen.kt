@@ -1,5 +1,8 @@
 package com.gojapan.feature.review.ui
 
+import com.gojapan.app.preview.GoJapanPreview
+import com.gojapan.app.preview.GoJapanPreviews
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -161,3 +164,15 @@ private val reviewKanaPool = listOf(
 }
 
 private data class KanaItemStub(val romaji: String, val hiragana: String, val katakana: String)
+
+@GoJapanPreviews
+@Composable
+private fun ReviewCompletedPreview() {
+    GoJapanPreview { UnifiedReviewScreen(UnifiedReviewState(loading = false), { _, _ -> }) }
+}
+
+@GoJapanPreviews
+@Composable
+private fun ReviewLoadingPreview() {
+    GoJapanPreview { UnifiedReviewScreen(UnifiedReviewState(), { _, _ -> }) }
+}

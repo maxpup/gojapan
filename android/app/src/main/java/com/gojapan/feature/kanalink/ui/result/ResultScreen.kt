@@ -96,7 +96,6 @@ fun ResultScreen(
         Text("🎉", modifier = Modifier.graphicsLayer { translationY = celebrationOffset })
         Text("全部完成，太棒了！", fontWeight = FontWeight.Bold)
         Text("用时 ${formatTime(summary.durationSeconds)} · 最高连击 ${summary.bestCombo}", Modifier.padding(vertical = 8.dp))
-        Text("建议 ${formatDate(summary.nextReviewAt)} 进行下一次复习")
         summary.items.forEach { item ->
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(
@@ -117,7 +116,7 @@ fun ResultScreen(
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         ) { Text("标记选中项为自评记熟") }
         Button(onClick = onAgain, Modifier.fillMaxWidth().padding(top = 12.dp)) { Text("再练一轮") }
-        OutlinedButton(onClick = onHome, Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("返回首页") }
+        OutlinedButton(onClick = onHome, Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("返回五十音") }
     }
 }
 

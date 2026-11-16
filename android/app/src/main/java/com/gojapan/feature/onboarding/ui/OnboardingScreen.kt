@@ -1,5 +1,9 @@
 package com.gojapan.feature.onboarding.ui
 
+import com.gojapan.app.preview.GoJapanPreview
+import com.gojapan.app.preview.GoJapanPreviews
+import androidx.compose.runtime.setValue
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -136,5 +140,24 @@ private fun AssessmentStep(answer: Boolean?, onAnswer: (Boolean?) -> Unit) {
 private fun ChoiceCard(label: String, selected: Boolean, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Text("${if (selected) "●" else "○"} $label", Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@GoJapanPreviews
+@Composable
+private fun OnboardingPreview() {
+    var draft by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(OnboardingDraft()) }
+    GoJapanPreview {
+        OnboardingScreen(
+            draft = draft,
+            onFoundation = { draft = draft.copy(foundation = it) },
+            onStatus = { draft = draft.copy(travelStatus = it) },
+            onDate = { draft = draft.copy(tripDate = it) },
+            onScene = { scene -> draft = draft.copy(scenes = if (scene in draft.scenes) draft.scenes - scene else draft.scenes + scene) },
+            onAssessment = { draft = draft.copy(assessmentCorrect = it) },
+            onNext = { draft = draft.copy(step = (draft.step + 1).coerceAtMost(3)) },
+            onBack = { draft = draft.copy(step = (draft.step - 1).coerceAtLeast(0)) },
+            onComplete = {},
+        )
     }
 }

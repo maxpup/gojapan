@@ -1,5 +1,6 @@
 package com.gojapan.feature.search.domain
 
+@kotlinx.serialization.Serializable
 data class TravelExpression(
     val id: String,
     val japanese: String,

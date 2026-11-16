@@ -50,7 +50,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 @HiltViewModel
-internal class GuideWebImportViewModel @Inject constructor(val aiClient: AiChatClient) : ViewModel()
+internal class GuideWebImportViewModel @Inject constructor(val aiClient: com.gojapan.core.ai.OpenAiCompatibleChatClient) : ViewModel()
 
 @Composable
 internal fun GuideWebImportRoute(initialUrl: String, onBack: () -> Unit) {
@@ -106,7 +106,9 @@ internal fun GuideWebImportScreen(
     var message by remember { mutableStateOf("仅支持小红书 HTTPS 网页。打开后请等正文显示，再点“提取页面”。") }
     var sourceText by remember { mutableStateOf("") }
     var page by remember { mutableStateOf<ExtractedGuidePage?>(null) }
-    var aiResult by remember { mutableStateOf("") }
+    var feedback by remember(sourceText, page) { mutableStateOf("") }
+    var history by remember(sourceText, page) { mutableStateOf(emptyList<AiChatTurn>()) }
+    var aiResult by remember(sourceText, page) { mutableStateOf("") }
     var aiStatus by remember { mutableStateOf("") }
     var showAiSettings by remember { mutableStateOf(false) }
     var generating by remember { mutableStateOf(false) }
@@ -194,6 +196,7 @@ internal fun GuideWebImportScreen(
             label = { Text("提取正文预览／手动粘贴") },
             modifier = Modifier.fillMaxWidth().height(220.dp),
         )
+        if (history.isNotEmpty()) OutlinedTextField(feedback, { feedback = it }, enabled = !generating, label = { Text("补充或修改要求") })
         Button(onClick = {
             val availability = aiClient.availability()
             if (availability is AiChatAvailability.Unavailable) {
@@ -201,20 +204,20 @@ internal fun GuideWebImportScreen(
                 return@Button
             }
             generating = true
-            aiResult = ""
+            val request = history + AiChatTurn(AiChatRole.USER, if (history.isEmpty()) buildGuidePrompt(sourceText, page) else feedback)
             aiStatus = "正在生成结构化预览，请稍候…"
             scope.launch {
                 runCatching {
-                    aiClient.reply(listOf(AiChatTurn(AiChatRole.USER, buildGuidePrompt(sourceText, page))))
+                    aiClient.reply(request)
                 }.onSuccess { raw ->
                     runCatching { validateGuidePreview(raw) }
-                        .onSuccess { aiResult = it; aiStatus = "已生成结构化预览，尚未保存。" }
+                        .onSuccess { history = request + AiChatTurn(AiChatRole.ASSISTANT, raw); feedback = ""; aiResult = it; aiStatus = "已生成结构化预览，尚未保存。" }
                         .onFailure { aiStatus = "AI 返回内容不是有效攻略 JSON：${it.message}" }
                 }
                     .onFailure { aiStatus = it.message ?: "AI 整理失败" }
                 generating = false
             }
-        }, enabled = sourceText.isNotBlank() && !generating) {
+        }, enabled = sourceText.isNotBlank() && !generating && (history.isEmpty() || feedback.isNotBlank())) {
             if (generating) CircularProgressIndicator() else Text("AI 生成结构化预览")
         }
         if (sourceText.isBlank()) {

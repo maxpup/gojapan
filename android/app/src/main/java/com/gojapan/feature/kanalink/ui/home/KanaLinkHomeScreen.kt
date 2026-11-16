@@ -98,7 +98,6 @@ private fun ReadyHome(
         Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             Text("学习 ${state.learningDays} 天")
             Text("完成 ${state.sessions} 轮")
-            Text("待复习 ${state.dueCount}")
         }
         Button(onClick = onStartLearning, enabled = state.course.isNotEmpty()) { Text(state.primaryAction) }
         androidx.compose.material3.OutlinedButton(

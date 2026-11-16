@@ -18,14 +18,13 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 @Singleton
-class DeepSeekTripGenerator @Inject constructor() {
+class DeepSeekTripGenerator @Inject constructor(private val keys: com.gojapan.core.ai.AiApiKeyStore) {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun generate(sourceText: String, sourceName: String, sourceUrl: String): TripPlan =
         withContext(Dispatchers.IO) {
-            check(BuildConfig.DEEPSEEK_API_KEY.isNotBlank() && !BuildConfig.DEEPSEEK_API_KEY.startsWith("YOUR_")) {
-                "请先在 android/local.properties 配置 DEEPSEEK_API_KEY"
-            }
+            val key = keys.read() ?: BuildConfig.DEEPSEEK_API_KEY.takeIf { BuildConfig.DEBUG && it.isNotBlank() && !it.startsWith("YOUR_") }
+            checkNotNull(key) { "请在 AI 助手中配置 API Key" }
             require(sourceText.isNotBlank()) { "攻略内容不能为空" }
 
             val request = buildJsonObject {
@@ -51,7 +50,7 @@ class DeepSeekTripGenerator @Inject constructor() {
                 readTimeout = 90_000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("Authorization", "Bearer ${BuildConfig.DEEPSEEK_API_KEY}")
+                setRequestProperty("Authorization", "Bearer $key")
             }
             try {
                 connection.outputStream.bufferedWriter().use { it.write(request.toString()) }

@@ -4,7 +4,12 @@ import com.gojapan.app.preview.GoJapanPreview
 import com.gojapan.app.preview.GoJapanPreviews
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.res.painterResource
+import com.gojapan.R
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -72,7 +77,7 @@ import com.gojapan.feature.trip.model.TripStop
 import com.gojapan.feature.trip.ui.map.TripMapPane
 
 @Composable
-fun TripPlannerRoute(viewModel: TripPlannerViewModel = hiltViewModel()) {
+fun TripPlannerRoute(viewModel: TripPlannerViewModel = hiltViewModel(), planHeader: (@Composable () -> Unit)? = null) {
     val state by viewModel.state.collectAsState()
     TripPlannerScreen(
         state = state,
@@ -82,6 +87,7 @@ fun TripPlannerRoute(viewModel: TripPlannerViewModel = hiltViewModel()) {
         onGenerate = viewModel::saveSourceAndGenerate,
         onMessageShown = viewModel::clearMessage,
         onSavePlan = viewModel::saveEditedPlan,
+        planHeader = planHeader,
     )
 }
 
@@ -94,9 +100,10 @@ fun TripPlannerScreen(
     onGenerate: (String) -> Unit,
     onMessageShown: () -> Unit,
     onSavePlan: suspend (TripPlan) -> Boolean,
+    planHeader: (@Composable () -> Unit)? = null,
 ) {
     TripVisualTheme {
-        TripPlannerBody(state, onSelectDay, onSelectStop, onSelectMapProvider, onGenerate, onMessageShown, onSavePlan)
+        TripPlannerBody(state, onSelectDay, onSelectStop, onSelectMapProvider, onGenerate, onMessageShown, onSavePlan, planHeader)
     }
 }
 
@@ -110,28 +117,22 @@ private fun TripPlannerBody(
     onGenerate: (String) -> Unit,
     onMessageShown: () -> Unit,
     onSavePlan: suspend (TripPlan) -> Boolean,
+    planHeader: (@Composable () -> Unit)? = null,
 ) {
     val snackbar = remember { SnackbarHostState() }
-    var showImporter by remember { mutableStateOf(false) }
-    var showWebImport by remember { mutableStateOf(false) }
-    var showAiChat by remember { mutableStateOf(false) }
     LaunchedEffect(state.message) {
         state.message?.let { snackbar.showSnackbar(it); onMessageShown() }
     }
-    if (showWebImport) {
-        GuideWebImportRoute(initialUrl = state.plan?.sourceUrl.orEmpty(), onBack = { showWebImport = false })
+    var showGuide by rememberSaveable { mutableStateOf(false) }
+    if (showGuide && state.plan != null) {
+        GuideTextImportRoute(state.plan, onSavePlan, onBack = { showGuide = false })
         return
     }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("旅の手帖", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) },
+                title = planHeader ?: { Text("旅の手帖", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                actions = {
-                    TextButton(onClick = { showAiChat = true }) { Text("AI 助手") }
-                    TextButton(onClick = { showWebImport = true }) { Text("网页提取") }
-                    TextButton(enabled = !state.isSaving && !state.isGenerating, onClick = { showImporter = true }) { Text("生成行程") }
-                },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -142,21 +143,10 @@ private fun TripPlannerBody(
                 CircularProgressIndicator()
             }
         } else {
-            TripContent(plan, state, onSelectDay, onSelectStop, onSelectMapProvider, Modifier.padding(padding), onSavePlan = onSavePlan)
+            TripContent(plan, state, onSelectDay, onSelectStop, onSelectMapProvider, Modifier.padding(padding), onSavePlan = onSavePlan, onImportGuide = { showGuide = true })
         }
     }
-    if (showImporter && state.plan != null) {
-        ImportDialog(
-            initialText = state.plan.sourceText,
-            sourceUrl = state.plan.sourceUrl,
-            loading = state.isGenerating,
-            onDismiss = { if (!state.isGenerating) showImporter = false },
-            onGenerate = onGenerate,
-        )
-    }
-    if (showAiChat) {
-        AiChatDialogRoute(onDismiss = { showAiChat = false })
-    }
+
 }
 
 @Composable
@@ -169,6 +159,7 @@ private fun TripContent(
     modifier: Modifier = Modifier,
     showMaps: Boolean = true,
     initialEditing: Boolean = false,
+    onImportGuide: (() -> Unit)? = null,
     onSavePlan: suspend (TripPlan) -> Boolean,
 ) {
     var editing by rememberSaveable { mutableStateOf(initialEditing) }
@@ -207,19 +198,21 @@ private fun TripContent(
     fun delete(updated: TripPlan) { scope.launch { save(updated, deleting = true) } }
     val dayIndex = state.selectedDay.takeIf { it in plan.days.indices } ?: -1
     val day = plan.days.getOrNull(dayIndex)
+    var sectionTab by rememberSaveable(dayIndex) { mutableStateOf<TripNoteSection?>(null) }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(Modifier.fillMaxSize()) {
             TripHeader(plan, dayIndex, onSelectDay,
-                canEdit = enabled, onEdit = { editing = true })
+                canEdit = enabled, onImportGuide = onImportGuide, onEdit = { editing = true })
             BoxWithConstraints(Modifier.weight(1f)) {
                 val wide = maxWidth >= 840.dp && showMaps && day != null
                 Row(Modifier.fillMaxSize()) {
-                    androidx.compose.runtime.key(dayIndex) {
+                    androidx.compose.runtime.key(dayIndex, sectionTab) {
                         LazyColumn(
                             Modifier.weight(1f), contentPadding = PaddingValues(bottom = 80.dp),
                         ) {
-                            if (day == null) {
-                                item { SectionTitle("行程安排") }
+                            if (sectionTab == null) item(key = "saved-guides") { SavedTripGuides() }
+                            if (sectionTab == null && day == null) {
+                                item { SectionTitle("行程概览") }
                                 itemsIndexed(plan.days) { index, entry ->
                                     androidx.compose.runtime.key(entry, index) {
                                         SwipeDeleteRow(enabled, onDelete = {
@@ -231,7 +224,7 @@ private fun TripContent(
                                                     MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant),
                                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
                                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Text(entry.date, style = MaterialTheme.typography.labelLarge)
+                                                    Text(dateWithWeekday(entry.date), style = MaterialTheme.typography.labelLarge)
                                                     Text(entry.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                                     Text(entry.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                     Text(entry.stops.joinToString(" → ") { it.name }, style = MaterialTheme.typography.bodySmall)
@@ -249,7 +242,7 @@ private fun TripContent(
                                         )))
                                     }
                                 }
-                            } else {
+                            } else if (sectionTab == null && day != null) {
                                 item { DayHeader(day) }
                                 item { SectionTitle("行程安排") }
                                 itemsIndexed(day.stops) { index, stop ->
@@ -259,7 +252,27 @@ private fun TripContent(
                                                 if (i == dayIndex) d.copy(stops = d.stops.filterIndexed { j, _ -> j != index }) else d
                                             }))
                                         }) {
-                                            StopCard(stop, index, index == state.selectedStop) { onSelectStop(index) }
+                                            var editAddress by remember { mutableStateOf(false) }
+                                            StopCard(stop, index, index == state.selectedStop) {
+                                                onSelectStop(index)
+                                                editAddress = enabled
+                                            }
+                                            if (editAddress) {
+                                                var address by remember(stop) { mutableStateOf(stop.googleAddress) }
+                                                AlertDialog(onDismissRequest = { editAddress = false },
+                                                    title = { Text(stop.name) },
+                                                    text = { OutlinedTextField(address, { address = it }, label = { Text("Google 地图地址") }) },
+                                                    confirmButton = { Button(enabled = enabled, onClick = {
+                                                        scope.launch {
+                                                            val stops = day.stops.toMutableList()
+                                                            stops[index] = stop.copy(googleAddress = address.trim())
+                                                            val days = plan.days.toMutableList()
+                                                            days[dayIndex] = day.copy(stops = stops)
+                                                            if (save(plan.copy(days = days))) editAddress = false
+                                                        }
+                                                    }) { Text("保存") } },
+                                                    dismissButton = { TextButton({ editAddress = false }) { Text("取消") } })
+                                            }
                                         }
                                     }
                                 }
@@ -273,9 +286,16 @@ private fun TripContent(
                                     }
                                 }
                             }
-                            TripNoteSection.entries.forEach { section ->
+                            listOf(sectionTab ?: TripNoteSection.Packing).forEach { section ->
                                 item {
                                     InlineNoteCard(section, plan.noteEntries(section, dayIndex), enabled,
+                                        onToggle = { entry -> scope.launch {
+                                            save(plan.changeNotes(section, entry.dayIndex) { notes ->
+                                                notes.mapIndexed { i, text ->
+                                                    if (i != entry.itemIndex) text else if (text.startsWith("☑ ")) text.removePrefix("☑ ") else "☑ $text"
+                                                }
+                                            })
+                                        } },
                                         onDelete = { entry ->
                                             delete(plan.changeNotes(section, entry.dayIndex) {
                                                 it.filterIndexed { i, _ -> i != entry.itemIndex }
@@ -285,7 +305,7 @@ private fun TripContent(
                                     )
                                 }
                             }
-                            if (day != null && showMaps && !wide) {
+                            if (sectionTab == null && day != null && showMaps && !wide) {
                                 item { SectionTitle("当天路线") }
                                 item {
                                     TripMapPane(day.stops, state.selectedStop, state.mapProvider,
@@ -295,9 +315,22 @@ private fun TripContent(
                             }
                         }
                     }
-                    if (wide && day != null) {
+                    if (sectionTab == null && wide && day != null) {
                         TripMapPane(day.stops, state.selectedStop, state.mapProvider, onSelectMapProvider,
                             onSelectStop, Modifier.weight(1f).fillMaxHeight())
+                    }
+                    Column(Modifier.width(64.dp).verticalScroll(rememberScrollState()).selectableGroup(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(null to "日程", TripNoteSection.Precautions to "注意事项",
+                            TripNoteSection.Todos to "待办", TripNoteSection.Food to "美食").forEach { (tab, label) ->
+                            val selected = sectionTab == tab
+                            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
+                                .selectable(selected, role = Role.Tab) { sectionTab = tab }
+                                .padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                                Text(label, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
                     }
                 }
             }
@@ -311,13 +344,14 @@ private fun InlineNoteCard(
     section: TripNoteSection,
     entries: List<TripNoteEntry>,
     enabled: Boolean,
+    onToggle: (TripNoteEntry) -> Unit,
     onDelete: (TripNoteEntry) -> Unit,
     onAdd: suspend (String) -> Boolean,
 ) {
     val (background, foreground) = when (section) {
         TripNoteSection.Food -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         TripNoteSection.Packing -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        TripNoteSection.Precautions -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        TripNoteSection.Todos, TripNoteSection.Precautions -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
     }
     Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
@@ -332,7 +366,10 @@ private fun InlineNoteCard(
                     SwipeDeleteRow(enabled, onDelete = { onDelete(entry) }) {
                         Column(Modifier.fillMaxWidth().background(background).padding(horizontal = 20.dp, vertical = 12.dp)) {
                             entry.date?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
-                            Text(entry.text, style = MaterialTheme.typography.bodyMedium)
+                            if (section == TripNoteSection.Todos) Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Checkbox(entry.text.startsWith("☑ "), { onToggle(entry) }, enabled = enabled)
+                                Text(entry.text.removePrefix("☑ "))
+                            } else Text(entry.text, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
@@ -343,43 +380,47 @@ private fun InlineNoteCard(
 }
 
 @Composable
-private fun TripHeader(plan: TripPlan, selectedDay: Int, onSelectDay: (Int) -> Unit, canEdit: Boolean, onEdit: () -> Unit) {
+private fun TripHeader(plan: TripPlan, selectedDay: Int, onSelectDay: (Int) -> Unit, canEdit: Boolean, onImportGuide: (() -> Unit)?, onEdit: () -> Unit) {
     Column {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-            color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+            color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(16.dp),
         ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp)) {
+                Text(plan.tripTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("旅の記録  /  TRAVEL NOTES", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(plan.tripTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                    Text("${plan.days.size} 天 · ${plan.days.sumOf { it.stops.size }} 个地点",
+                        Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    IconButton(onClick = onEdit, enabled = canEdit) {
+                        Icon(painterResource(R.drawable.ic_trip_edit), "修改日程", Modifier.size(20.dp))
                     }
-                    TripMascot()
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${plan.days.size} 天慢慢逛 · ${plan.days.sumOf { it.stops.size }} 个地点",
-                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = onEdit, enabled = canEdit) {
-                        Text("更多编辑", style = MaterialTheme.typography.labelSmall)
+                    if (onImportGuide != null) IconButton(onClick = onImportGuide) {
+                        Icon(painterResource(R.drawable.ic_guide_import), "攻略导入", Modifier.size(20.dp))
                     }
                 }
             }
         }
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             TripTab("总览", selectedDay == -1) { onSelectDay(-1) }
             plan.days.forEachIndexed { index, day ->
-                TripTab(day.date, selectedDay == index) { onSelectDay(index) }
+                TripTab(dateWithWeekday(day.date), selectedDay == index) { onSelectDay(index) }
             }
         }
     }
+}
+
+internal val LocalDepartureDate = androidx.compose.runtime.staticCompositionLocalOf<String?> { null }
+
+@Composable
+private fun dateWithWeekday(date: String): String {
+    val start = LocalDepartureDate.current
+    val parsed = com.gojapan.feature.trip.model.resolveGuideDate(date, start) ?: return date
+    return date + "\n" + parsed.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.SIMPLIFIED_CHINESE)
 }
 
 @Composable
@@ -394,19 +435,6 @@ private fun TripTab(label: String, selected: Boolean, onClick: () -> Unit) {
         Text(label, style = MaterialTheme.typography.labelLarge,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun TripMascot() {
-    val yellow = MaterialTheme.colorScheme.primaryContainer
-    val paper = MaterialTheme.colorScheme.background
-    val ink = MaterialTheme.colorScheme.onSurface
-    Canvas(Modifier.size(68.dp)) {
-        drawOval(yellow, topLeft = Offset(size.width * .18f, size.height * .35f), size = Size(size.width * .82f, size.height * .62f))
-        drawOval(paper, topLeft = Offset(0f, 0f), size = Size(size.width * .85f, size.height * .76f))
-        drawOval(ink, topLeft = Offset(size.width * .32f, size.height * .28f), size = Size(size.width * .065f, size.height * .10f))
-        drawOval(ink, topLeft = Offset(size.width * .47f, size.height * .28f), size = Size(size.width * .065f, size.height * .10f))
     }
 }
 
@@ -447,6 +475,7 @@ private fun StopCard(stop: TripStop, index: Int, selected: Boolean, onClick: () 
                     Text(stop.time, color = MaterialTheme.colorScheme.primary)
                 }
                 Text(stop.category, style = MaterialTheme.typography.labelMedium)
+                if (stop.googleAddress.isNotBlank()) Text(stop.googleAddress)
                 if (stop.note.isNotBlank()) Text(stop.note, modifier = Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

@@ -6,6 +6,31 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TripPlanTest {
+    @Test fun guideWeekdaysHandleImportedLabelsAndYearBoundaries() {
+        val start = "2026-12-31"
+        assertEquals("2027-01-01", resolveGuideDate("Day 2｜1.1 新年", start).toString())
+        assertEquals("2027-01-01", resolveGuideDate("第二天", start).toString())
+        assertEquals("2026-11-21", resolveGuideDate("11月21日", "2026-11-20").toString())
+        assertEquals("2026-11-21", resolveGuideDate("2026年11月21日", null).toString())
+        assertNull(resolveGuideDate("第 1 天", null))
+        assertNull(resolveGuideDate("2026-02-30", start))
+    }
+
+    @Test fun overviewImportsWithoutStopsAndKeepsExistingRoute() {
+        val day = TripDay("第 1 天", "原主题", "", listOf(TripStop("浅草寺")))
+        val old = TripPlan(tripTitle = "原计划", destination = "东京", days = listOf(day))
+        val general = TripPlan(tripTitle = "", destination = "", days = emptyList(),
+            overview = "东京赏枫", dateRange = "11月21日至29日")
+        val preview = old.previewImport(general)
+        assertEquals(old.copy(overview = general.overview, dateRange = general.dateRange), preview.plan)
+        assertEquals(2, preview.changes.size)
+        val summaryDay = day.copy(title = "浅草散步", summary = "上午参拜", stops = emptyList())
+        val updated = preview.plan.previewImport(general.copy(days = listOf(summaryDay))).plan
+        assertEquals(summaryDay.copy(stops = day.stops), updated.days.single())
+        assertEquals(emptyList<String>(), updated.previewImport(general).changes)
+        assertEquals(updated, Json.decodeFromString<TripPlan>(Json.encodeToString(TripPlan.serializer(), updated)))
+    }
+
     @Test
     fun `deepseek json with null coordinates parses`() {
         val plan = Json.decodeFromString<TripPlan>(

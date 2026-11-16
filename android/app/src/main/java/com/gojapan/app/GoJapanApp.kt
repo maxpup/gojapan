@@ -47,67 +47,64 @@ fun GoJapanApp(
     modifier: Modifier = Modifier,
     kanaLinkContent: (@Composable () -> Unit)? = null,
 ) {
-    val onboardingViewModel = if (kanaLinkContent == null) hiltViewModel<OnboardingViewModel>() else null
-    val profile = onboardingViewModel?.profile?.collectAsStateWithLifecycle()?.value
-    if (onboardingViewModel != null) {
-        if (profile == null) {
-            Box(modifier.fillMaxSize()) { Text("正在准备学习路径…", Modifier.padding(24.dp)) }
-            return
-        }
-        if (!profile.completed) {
-            OnboardingRoute(onboardingViewModel, modifier)
-            return
-        }
+    if (kanaLinkContent == null) {
+        com.gojapan.feature.travelplan.TravelPlanRoute { plan, header -> MainPages(modifier, null, header, plan) }
+    } else MainPages(modifier, kanaLinkContent)
+}
+
+@Composable
+private fun MainPages(modifier: Modifier, kanaLinkContent: (@Composable () -> Unit)?, planHeader: (@Composable () -> Unit)? = null, plan: com.gojapan.feature.travelplan.TravelPlan? = null) {
+    var route by rememberSaveable { mutableStateOf(AppDestination.TRIPS) }
+    var page by rememberSaveable { mutableStateOf("目录") }
+    var sceneSource by rememberSaveable { mutableStateOf("目录") }
+    val selected = when (route) {
+        AppDestination.TRIPS, AppDestination.HOME -> AppDestination.TRIPS
+        AppDestination.EXPENSE -> AppDestination.EXPENSE
+        else -> AppDestination.LEARN_JAPANESE
     }
-    val learningStart = profile?.let(LearningPathGenerator::start) ?: LearningStart.KANA
-    val initialDestination = if (learningStart == LearningStart.SCENE) {
-        AppDestination.LEARN_JAPANESE
-    } else {
-        AppDestination.HOME
+    val section = when (route) {
+        AppDestination.SEARCH -> "搜索"
+        AppDestination.FAVORITES -> "我的收藏"
+        AppDestination.REVIEW -> "目录"
+        else -> page
     }
-    var selected by rememberSaveable { mutableStateOf(initialDestination) }
-    var showKanaLink by rememberSaveable { mutableStateOf(learningStart == LearningStart.KANA) }
-    val flowViewModel = if (kanaLinkContent == null) hiltViewModel<KanaFlowViewModel>() else null
-    val selectDestination: (AppDestination) -> Unit = { destination ->
-        if (destination == AppDestination.HOME) {
-            showKanaLink = false
-            flowViewModel?.goHome()
-        }
-        selected = destination
-    }
-    val defaultKanaContent: @Composable () -> Unit = { KanaLinkFlow(checkNotNull(flowViewModel)) }
-    val kanaContent = kanaLinkContent ?: defaultKanaContent
-    val homeContent: @Composable () -> Unit = {
-        if (showKanaLink) {
-            kanaContent()
-        } else {
-            HomeDashboardRoute(
-                onKana = { showKanaLink = true; flowViewModel?.goHome() },
-                onLearn = { selected = AppDestination.LEARN_JAPANESE },
-                onReview = { selected = AppDestination.REVIEW },
-                onFavorites = { selected = AppDestination.FAVORITES },
-            )
+    val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    val open: (String) -> Unit = { page = it; route = AppDestination.LEARN_JAPANESE }
+    val back = { open(if (section == "场景学习") sceneSource else "目录") }
+    androidx.activity.compose.BackHandler(selected == AppDestination.LEARN_JAPANESE && section != "目录", back)
+    val select: (AppDestination) -> Unit = { page = section; route = it }
+    val content: @Composable (Modifier) -> Unit = { area ->
+        Box(area.fillMaxSize()) {
+            holder.SaveableStateProvider(if (selected == AppDestination.LEARN_JAPANESE) section else selected.name) {
+                if (selected == AppDestination.TRIPS) {
+                    if (kanaLinkContent == null) androidx.compose.runtime.CompositionLocalProvider(
+                        com.gojapan.feature.trip.ui.LocalDepartureDate provides plan?.start
+                    ) { TripPlannerRoute(planHeader = planHeader) } else Text("行程规划")
+                } else if (selected == AppDestination.EXPENSE) androidx.compose.foundation.layout.Column {
+                    planHeader?.invoke()
+                    if (plan != null) androidx.compose.runtime.key(plan.owner, plan.id) { com.gojapan.feature.expense.ExpenseScreen(plan) }
+                } else androidx.compose.foundation.layout.Column {
+                    planHeader?.invoke()
+                    if (section != "目录") androidx.compose.material3.TextButton(onClick = back) { Text("返回" + if (section == "场景学习" && sceneSource == "搜索") "搜索" else "语言") }
+                    when (section) {
+                        "搜索" -> SearchScreen(onOpenScenes = { sceneSource = "搜索"; open("场景学习") }, onOpenKana = { open("五十音") })
+                        "我的收藏" -> FavoritesRoute()
+                        "场景学习" -> SceneLessonRoute()
+                        "五十音" -> if (kanaLinkContent != null) kanaLinkContent() else KanaLinkFlow(hiltViewModel())
+                        else -> SearchScreen(
+                            onOpenScenes = { sceneSource = "目录"; open("场景学习") },
+                            onOpenKana = { open("五十音") },
+                        )
+                    }
+                }
+            }
         }
     }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        if (maxWidth >= 600.dp) {
-            Row(Modifier.fillMaxSize().safeDrawingPadding()) {
-                AppNavigationRail(selected, onSelect = selectDestination)
-                AppContent(
-                    selected, Modifier.weight(1f), homeContent,
-                    onOpenReview = { selected = AppDestination.REVIEW },
-                    onOpenLearn = { selected = AppDestination.LEARN_JAPANESE },
-                )
-            }
-        } else {
-            Scaffold(
-                bottomBar = { AppNavigationBar(selected, onSelect = selectDestination) },
-            ) { padding -> AppContent(
-                selected, Modifier.padding(padding), homeContent,
-                onOpenReview = { selected = AppDestination.REVIEW },
-                onOpenLearn = { selected = AppDestination.LEARN_JAPANESE },
-            ) }
-        }
+        if (maxWidth >= 600.dp) Row(Modifier.fillMaxSize().safeDrawingPadding()) {
+            AppNavigationRail(selected, select)
+            content(Modifier.weight(1f))
+        } else Scaffold(bottomBar = { AppNavigationBar(selected, select) }) { content(Modifier.padding(it)) }
     }
 }
 
@@ -137,29 +134,9 @@ private fun KanaLinkFlow(viewModel: KanaFlowViewModel) {
 }
 
 @Composable
-private fun AppContent(
-    destination: AppDestination,
-    modifier: Modifier = Modifier,
-    homeContent: @Composable () -> Unit,
-    onOpenReview: () -> Unit,
-    onOpenLearn: () -> Unit,
-) {
-    Box(modifier.fillMaxSize()) {
-        when (destination) {
-            AppDestination.HOME -> homeContent()
-            AppDestination.LEARN_JAPANESE -> SceneLessonRoute()
-            AppDestination.REVIEW -> ReviewRoute()
-            AppDestination.TRIPS -> TripPlannerRoute()
-            AppDestination.SEARCH -> SearchScreen(onOpenScenes = onOpenLearn)
-            AppDestination.FAVORITES -> FavoritesRoute(onReview = onOpenReview)
-        }
-    }
-}
-
-@Composable
 private fun AppNavigationBar(selected: AppDestination, onSelect: (AppDestination) -> Unit) {
     NavigationBar {
-        AppDestination.entries.forEach { destination ->
+        AppDestination.tabs.forEach { destination ->
             NavigationBarItem(
                 selected = selected == destination,
                 onClick = { onSelect(destination) },
@@ -173,7 +150,7 @@ private fun AppNavigationBar(selected: AppDestination, onSelect: (AppDestination
 @Composable
 private fun AppNavigationRail(selected: AppDestination, onSelect: (AppDestination) -> Unit) {
     NavigationRail {
-        AppDestination.entries.forEach { destination ->
+        AppDestination.tabs.forEach { destination ->
             NavigationRailItem(
                 selected = selected == destination,
                 onClick = { onSelect(destination) },

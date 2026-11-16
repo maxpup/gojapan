@@ -1,5 +1,8 @@
 package com.gojapan.feature.home
 
+import com.gojapan.app.preview.GoJapanPreview
+import com.gojapan.app.preview.GoJapanPreviews
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -99,3 +102,24 @@ private fun ProgressCard(label: String, value: Int, total: Int) {
 }
 
 private const val SceneLessonCatalogSize = 25
+
+@GoJapanPreviews
+@Composable
+private fun HomeDashboardPreview() {
+    GoJapanPreview {
+        HomeDashboardScreen(
+            state = HomeDashboardState(
+                loading = false, kanaExplored = 32, sceneLessonsCompleted = 3,
+                dueCount = 8, favoriteCount = 12, tripDaysRemaining = 14,
+                recommendedLesson = com.gojapan.feature.lesson.domain.SceneLessonCatalog.allLessons.first(),
+            ),
+            onKana = {}, onLearn = {}, onReview = {}, onFavorites = {},
+        )
+    }
+}
+
+@GoJapanPreviews
+@Composable
+private fun HomeDashboardLoadingPreview() {
+    GoJapanPreview { HomeDashboardScreen(HomeDashboardState(), {}, {}, {}, {}) }
+}

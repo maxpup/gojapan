@@ -26,6 +26,7 @@ data class LibraryUiState(
 @HiltViewModel
 class TravelLibraryViewModel @Inject constructor(
     private val preferences: TravelLibraryPreferences,
+    private val ai: com.gojapan.core.ai.OpenAiCompatibleChatClient,
     private val analytics: AnalyticsTracker,
 ) : ViewModel() {
     val rawState: StateFlow<TravelLibraryState> = preferences.state.stateIn(
@@ -36,12 +37,17 @@ class TravelLibraryViewModel @Inject constructor(
 
     val state: StateFlow<LibraryUiState> = preferences.state.map { library ->
         LibraryUiState(
-            favorites = expressions(library.favoriteIds),
+            favorites = expressions(library.favoriteIds) + library.generated.filter { it.id in library.favoriteIds },
             frequentSearches = expressions(library.frequentSearchIds),
             reviewIds = library.reviewIds,
             frequentWrong = expressions(library.frequentWrongIds),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    suspend fun generateGroups(turns: List<com.gojapan.core.ai.AiChatTurn>): String = ai.complete(turns,
+        "根据对话最新要求生成多组日语表达，默认三组。每次返回完整 JSON 数组。每项包含 japanese、kana、romaji、chinese、scene、politeness 字符串。", 4096)
+
+    fun saveGroup(expression: TravelExpression) = viewModelScope.launch { preferences.saveGenerated(expression) }
 
     fun toggleFavorite(id: String) = viewModelScope.launch {
         val adding = id !in rawState.value.favoriteIds

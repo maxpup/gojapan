@@ -38,10 +38,7 @@ class AndroidAiApiKeyStore @Inject constructor(
         }
         String(cipher.doFinal(Base64.decode(encrypted, Base64.NO_WRAP)), Charsets.UTF_8)
             .takeIf(String::isNotBlank)
-    }.getOrElse {
-        clear()
-        null
-    }
+    }.getOrNull()
 
     @Synchronized
     override fun save(apiKey: String) {

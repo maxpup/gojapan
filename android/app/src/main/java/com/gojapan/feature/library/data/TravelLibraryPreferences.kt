@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import kotlinx.serialization.encodeToString
 import java.time.Clock
 import java.time.Duration
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +15,7 @@ import com.gojapan.feature.review.domain.TravelReviewResult
 import com.gojapan.feature.review.domain.TravelReviewScheduler
 
 data class TravelLibraryState(
+    val generated: List<com.gojapan.feature.search.domain.TravelExpression> = emptyList(),
     val favoriteIds: Set<String> = emptySet(),
     val reviewIds: Set<String> = emptySet(),
     val frequentSearchIds: Set<String> = emptySet(),
@@ -31,6 +33,15 @@ class TravelLibraryPreferences(
     private val clock: Clock,
     private val reviewScheduler: TravelReviewScheduler = TravelReviewScheduler(),
 ) {
+    private val generatedKey = stringPreferencesKey("generated_expressions")
+    suspend fun saveGenerated(expression: com.gojapan.feature.search.domain.TravelExpression) {
+        dataStore.edit { values ->
+            val stored = values[generatedKey]?.let { kotlinx.serialization.json.Json.decodeFromString<List<com.gojapan.feature.search.domain.TravelExpression>>(it) }.orEmpty()
+            values[generatedKey] = kotlinx.serialization.json.Json.encodeToString(stored.filterNot { it.id == expression.id } + expression)
+            values[FAVORITES] = values[FAVORITES].orEmpty() + expression.id
+        }
+    }
+
     val state: Flow<TravelLibraryState> = dataStore.data.map { values ->
         val recent = SearchHistoryCodec.decode(values[SEARCH_HISTORY].orEmpty())
             .mapValues { (_, timestamps) -> SearchHistoryCodec.recent(timestamps, clock.millis()) }
@@ -41,6 +52,7 @@ class TravelLibraryPreferences(
         val hiddenWrong = values[HIDDEN_WRONG].orEmpty()
         val lessonScores = LessonScoreCodec.decode(values[LESSON_SCORES].orEmpty())
         TravelLibraryState(
+            generated = values[generatedKey]?.let { kotlinx.serialization.json.Json.decodeFromString<List<com.gojapan.feature.search.domain.TravelExpression>>(it) }.orEmpty(),
             favoriteIds = values[FAVORITES].orEmpty(),
             reviewIds = enrolled,
             frequentSearchIds = SearchHistoryCodec.frequentIds(recent, FREQUENT_THRESHOLD) - hidden,

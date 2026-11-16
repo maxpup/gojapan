@@ -16,7 +16,7 @@ import com.gojapan.feature.trip.model.TripPlan
 import kotlinx.coroutines.launch
 
 internal enum class TripNoteSection(val title: String) {
-    Food("美食推荐"), Precautions("注意事项"), Packing("必带物品");
+    Food("美食推荐"), Precautions("注意事项"), Packing("必带物品"), Todos("待办事项");
 }
 internal data class TripNoteEntry(val dayIndex: Int, val itemIndex: Int, val text: String, val date: String?)
 
@@ -24,6 +24,7 @@ internal fun TripPlan.noteEntries(section: TripNoteSection, dayIndex: Int): List
     fun values(day: TripDay?): List<String> = when (section) {
         TripNoteSection.Food -> day?.foodRecommendations ?: foodRecommendations
         TripNoteSection.Precautions -> day?.precautions ?: precautions
+        TripNoteSection.Todos -> day?.todos ?: todos
         TripNoteSection.Packing -> day?.packingItems ?: packingItems
     }
     if (dayIndex >= 0) return values(days[dayIndex]).mapIndexed { i, text -> TripNoteEntry(dayIndex, i, text, null) }
@@ -35,12 +36,14 @@ internal fun TripPlan.changeNotes(section: TripNoteSection, dayIndex: Int, chang
     if (dayIndex < 0) return when (section) {
         TripNoteSection.Food -> copy(foodRecommendations = change(foodRecommendations))
         TripNoteSection.Precautions -> copy(precautions = change(precautions))
+        TripNoteSection.Todos -> copy(todos = change(todos))
         TripNoteSection.Packing -> copy(packingItems = change(packingItems))
     }
     return copy(days = days.mapIndexed { i, day ->
         if (i != dayIndex) day else when (section) {
             TripNoteSection.Food -> day.copy(foodRecommendations = change(day.foodRecommendations))
             TripNoteSection.Precautions -> day.copy(precautions = change(day.precautions))
+            TripNoteSection.Todos -> day.copy(todos = change(day.todos))
             TripNoteSection.Packing -> day.copy(packingItems = change(day.packingItems))
         }
     })

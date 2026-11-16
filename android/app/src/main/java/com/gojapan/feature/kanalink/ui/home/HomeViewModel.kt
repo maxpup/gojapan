@@ -31,7 +31,7 @@ sealed interface HomeUiState {
         val masteredCount = progress.values.count { it.level == 5 || it.manualMastered }
         val primaryAction = when {
             sessions == 0 -> "开始学习"
-            dueCount > 0 -> "复习 ${minOf(5, dueCount)} 个音"
+            dueCount > 0 -> "练习 ${minOf(5, dueCount)} 个音"
             else -> "学习 5 个新音"
         }
     }

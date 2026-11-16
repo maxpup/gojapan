@@ -7,8 +7,8 @@ class AppDestinationTest {
     @Test
     fun destinationsKeepProductOrder() {
         assertEquals(
-            listOf("首页", "学习", "复习", "行程", "搜索", "收藏"),
-            AppDestination.entries.map(AppDestination::label),
+            listOf("行程", "语言", "记账"),
+            AppDestination.tabs.map(AppDestination::label),
         )
     }
 }

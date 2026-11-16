@@ -1,5 +1,8 @@
 package com.gojapan.feature.lesson.ui
 
+import com.gojapan.app.preview.GoJapanPreview
+import com.gojapan.app.preview.GoJapanPreviews
+
 import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -171,8 +174,20 @@ private fun LessonResult(
         Text(lesson.title, style = MaterialTheme.typography.titleLarge)
         Text("首次练习正确率：${state.initialAccuracy}%")
         Text("最终挑战正确率：${state.challengeAccuracy}%")
-        Text("薄弱内容：$weak · 已全部加入复习计划")
+        Text("薄弱内容：$weak")
         if (!state.passed || weak > 0) Button(onClick = onRetry) { Text("只练错题与薄弱内容") }
         OutlinedButton(onClick = onBack) { Text("返回场景目录") }
     }
+}
+
+@GoJapanPreviews
+@Composable
+private fun SceneCatalogPreview() {
+    GoJapanPreview { SceneCatalog(TravelScene.entries, {}) }
+}
+
+@GoJapanPreviews
+@Composable
+private fun SceneLessonPreview() {
+    GoJapanPreview { LessonPreview(SceneLessonCatalog.allLessons.first(), {}, {}) }
 }

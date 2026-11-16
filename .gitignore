@@ -42,3 +42,10 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Local project notes and exports
+/gojapan-*.tar.gz
+/AGENTS.md
+/docs/
+/小红书-日本九日攻略.md
+/android/PREVIEWS.md

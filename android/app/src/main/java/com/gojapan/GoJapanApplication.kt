@@ -9,6 +9,7 @@ import dagger.hilt.android.HiltAndroidApp
 class GoJapanApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.gojapan.feature.kanalink.notification.ReviewNotificationScheduler(this).setEnabled(false)
         if (DatabaseRecovery.recoverIfCorrupt(this)) {
             Toast.makeText(this, "学习记录异常，已保留副本并恢复为空历史", Toast.LENGTH_LONG).show()
         }

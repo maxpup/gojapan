@@ -1,6 +1,7 @@
 package com.gojapan.app
 
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import com.gojapan.MainActivity
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -12,20 +13,22 @@ import org.junit.Rule
 import org.junit.Test
 
 class GoJapanAppTest {
-    @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun fiveTabsAreVisibleAndHomeIsSelectedForKanaPath() {
-        composeRule.setContent { GoJapanApp(kanaLinkContent = { Text("KANA LINK") }) }
-        listOf("首页", "学习", "复习", "搜索", "收藏").forEach {
+    fun twoTabsAreVisibleAndTripsIsSelected() {
+        composeRule.activity.runOnUiThread { composeRule.activity.setContent { GoJapanApp(kanaLinkContent = { Text("KANA LINK") }) } }
+        listOf("行程", "语言", "记账").forEach {
             composeRule.onNode(hasText(it) and hasClickAction()).assertExists()
         }
-        composeRule.onNode(hasText("首页") and hasClickAction()).assertIsSelected()
+        composeRule.onNode(hasText("行程") and hasClickAction()).assertIsSelected()
     }
 
     @Test
     fun kanaPathDisplaysInjectedContentInsideHomeDestination() {
-        composeRule.setContent { GoJapanApp(kanaLinkContent = { Text("KANA LINK") }) }
+        composeRule.activity.runOnUiThread { composeRule.activity.setContent { GoJapanApp(kanaLinkContent = { Text("KANA LINK") }) } }
+        composeRule.onNode(hasText("语言") and hasClickAction()).performClick()
+        composeRule.onNodeWithText("五十音").performClick()
         composeRule.onNodeWithText("KANA LINK").assertExists()
     }
 }

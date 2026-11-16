@@ -104,8 +104,9 @@ fun AiChatDialog(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text("GoJapan AI 助手", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Debug Demo · AI 可能出错，请核实重要信息", style = MaterialTheme.typography.labelSmall)
+                        Text("AI 可能出错，请核实重要信息", style = MaterialTheme.typography.labelSmall)
                     }
+                    TextButton(onClick = onOpenApiKeyEditor, enabled = !state.isSending) { Text("配置") }
                     IconButton(onClick = onDismiss, enabled = !state.isSending) {
                         Text("×", style = MaterialTheme.typography.headlineSmall)
                     }
@@ -193,7 +194,7 @@ fun AiChatDialog(
             title = { Text("配置 AI API Key") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Key 会经 Android Keystore 加密后保存在本机。此直连方式仅用于 Debug Demo。")
+                    Text("Key 会经 Android Keystore 加密后保存在本机。请求会发送至 AI 服务商，费用由该 Key 所属账户承担。")
                     OutlinedTextField(
                         value = state.apiKeyInput,
                         onValueChange = onApiKeyChange,
@@ -230,7 +231,7 @@ private fun ChatBubble(message: ChatMessage) {
         contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         Text(
-            text = message.text,
+            text = com.gojapan.core.ai.formatAiText(message.text),
             modifier = Modifier
                 .fillMaxWidth(0.86f)
                 .clip(RoundedCornerShape(16.dp))

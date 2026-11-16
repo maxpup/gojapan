@@ -23,30 +23,43 @@ class OpenAiCompatibleChatClient @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true }
 
     override fun availability(): AiChatAvailability = when {
-        !BuildConfig.DEBUG -> AiChatAvailability.Unavailable("AI 直连仅允许在 Debug 构建中使用")
         !apiKeyIsConfigured() -> AiChatAvailability.Unavailable(
-            "尚未配置 AI API Key。点击“配置”后输入 Key，即可在本机启用 Demo 对话。",
+            "尚未配置 AI API Key。点击“配置”后输入 Key，即可使用。请求会发送至 AI 服务商，可能产生费用。",
         )
         else -> AiChatAvailability.Available
     }
 
-    override suspend fun reply(messages: List<AiChatTurn>): String = withContext(Dispatchers.IO) {
-        val availability = availability()
-        check(availability is AiChatAvailability.Available) {
-            (availability as AiChatAvailability.Unavailable).message
-        }
+    override suspend fun reply(messages: List<AiChatTurn>): String = complete(messages, SYSTEM_PROMPT, 2048)
+
+    val modelName: String get() = BuildConfig.DEEPSEEK_MODEL.ifBlank { DEFAULT_MODEL }
+    val providerName: String get() = URL(baseUrl()).host
+
+    suspend fun complete(messages: List<AiChatTurn>, systemPrompt: String, maxTokens: Int): String =
+        send(messages, systemPrompt, maxTokens, null, false)
+
+    suspend fun completeGuide(messages: List<AiChatTurn>, systemPrompt: String, maxTokens: Int,
+                              onResponse: (Int, String) -> Unit): String =
+        send(messages, systemPrompt, maxTokens, onResponse, true)
+
+    private suspend fun send(messages: List<AiChatTurn>, systemPrompt: String, maxTokens: Int,
+                         onResponse: ((Int, String) -> Unit)?, guide: Boolean): String = withContext(Dispatchers.IO) {
+        val apiKey = configuredApiKey() ?: throw AiChatException("未能读取 AI API Key，请解锁设备重试或打开 AI 设置检查配置")
         require(messages.any { it.role == AiChatRole.USER }) { "请输入问题" }
 
         val request = buildJsonObject {
             put("model", BuildConfig.DEEPSEEK_MODEL.ifBlank { DEFAULT_MODEL })
+            if (guide && providerName == "api.deepseek.com") {
+                put("thinking", buildJsonObject { put("type", "disabled") })
+                put("response_format", buildJsonObject { put("type", "json_object") })
+            }
             put("stream", false)
-            put("max_tokens", 2048)
+            put("max_tokens", maxTokens)
             put("messages", buildJsonArray {
                 add(buildJsonObject {
                     put("role", "system")
-                    put("content", SYSTEM_PROMPT)
+                    put("content", systemPrompt)
                 })
-                messages.takeLast(MAX_CONTEXT_TURNS).forEach { turn ->
+                (if (guide) messages else messages.takeLast(MAX_CONTEXT_TURNS)).forEach { turn ->
                     add(buildJsonObject {
                         put("role", turn.role.apiValue)
                         put("content", turn.content)
@@ -61,23 +74,40 @@ class OpenAiCompatibleChatClient @Inject constructor(
             readTimeout = READ_TIMEOUT_MS
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Bearer ${configuredApiKey()}")
+            setRequestProperty("Authorization", "Bearer $apiKey")
         }
 
         try {
             connection.outputStream.bufferedWriter().use { it.write(request.toString()) }
             val status = connection.responseCode
-            if (status !in 200..299) {
-                throw AiChatException(httpErrorMessage(status))
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (onResponse != null) withContext(Dispatchers.Main.immediate) {
+                onResponse(status, body.replace(apiKey, "[已隐藏密钥]"))
             }
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            json.parseToJsonElement(body).jsonObject["choices"]
-                ?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject
-                ?.get("content")?.jsonPrimitive?.contentOrNull
-                ?.trim()?.takeIf(String::isNotEmpty)
-                ?: throw AiChatException("AI 未返回有效内容")
+            if (status !in 200..299) throw AiChatException(httpErrorMessage(status))
+            if (body.isBlank()) throw AiChatException("AI 服务返回了空响应体")
+            val choice = try {
+                json.parseToJsonElement(body).jsonObject["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+            } catch (error: IllegalArgumentException) {
+                throw AiChatException("AI 服务响应格式无法解析", error)
+            }
+            if (guide && choice?.get("finish_reason")?.toString() == "\"length\"") {
+                throw AiChatException("服务因长度限制截断了攻略；本次输出预算为 ${maxTokens} token，请查看原始响应中的 usage")
+            }
+            val message = choice?.get("message") as? kotlinx.serialization.json.JsonObject
+            val content = message?.get("content") as? kotlinx.serialization.json.JsonPrimitive
+            content?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) ?: throw AiChatException(
+                if (choice?.get("finish_reason")?.toString() == "\"length\"")
+                    "AI 输出达到长度上限，未返回回复正文"
+                else "AI 响应中没有可读取的回复正文（choices[0].message.content）"
+            )
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
         } catch (error: AiChatException) {
             throw error
+        } catch (error: java.net.SocketTimeoutException) {
+            throw AiChatException("AI 请求超时，请重试", error)
         } catch (error: Exception) {
             throw AiChatException("网络连接失败，请检查网络后重试", error)
         } finally {
@@ -88,7 +118,7 @@ class OpenAiCompatibleChatClient @Inject constructor(
     private fun apiKeyIsConfigured(): Boolean = configuredApiKey() != null
 
     private fun configuredApiKey(): String? = apiKeyStore.read()
-        ?: BuildConfig.DEEPSEEK_API_KEY.takeIf { it.isNotBlank() && !it.startsWith("YOUR_") }
+        ?: if (BuildConfig.DEBUG) BuildConfig.DEEPSEEK_API_KEY.takeIf { it.isNotBlank() && !it.startsWith("YOUR_") } else null
 
     private fun baseUrl(): String = BuildConfig.DEEPSEEK_BASE_URL
         .trimEnd('/')

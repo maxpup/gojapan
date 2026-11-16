@@ -124,7 +124,7 @@ fun ReportScreen(
                 }
             }
         }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回首页") }
+        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回五十音") }
     }
 }
 

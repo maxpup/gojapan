@@ -123,7 +123,6 @@ fun SettingsScreen(
         Text("设置")
         SettingRow("假名语音", state.voiceEnabled, onVoice)
         SettingRow("游戏音效", state.soundEffectEnabled, onSound)
-        SettingRow("复习通知", state.reviewNotificationEnabled, onNotifications)
         SettingRow("减少动态效果", state.reduceMotionEnabled, onReduceMotion)
         OutlinedButton(onClick = onExport, modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) { Text("导出学习记录") }
         OutlinedButton(onClick = { confirmClear = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("清除学习记录") }

@@ -28,8 +28,8 @@ internal fun TripPlan.editValidationError(): String? = when {
     destination.isBlank() -> "请填写目的地"
     days.any { it.date.isBlank() || it.title.isBlank() } -> "请填写每天的日期和主题"
     days.any { day -> day.stops.any { it.name.isBlank() } } -> "请填写地点名称，或删除空地点"
-    (foodRecommendations + precautions + packingItems).any { it.isBlank() } ||
-        days.any { day -> (day.foodRecommendations + day.precautions + day.packingItems).any { it.isBlank() } } ->
+    (foodRecommendations + todos + precautions + packingItems).any { it.isBlank() } ||
+        days.any { day -> (day.foodRecommendations + day.todos + day.precautions + day.packingItems).any { it.isBlank() } } ->
         "请填写清单内容，或删除空白条目"
     else -> null
 }
@@ -110,6 +110,8 @@ internal fun TripEditor(
                     Column {
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         EditorField("行程主题", draft.tripTitle, !saving) { draft = draft.copy(tripTitle = it) }
+                        EditorField("全程摘要", draft.overview, !saving) { draft = draft.copy(overview = it) }
+                        EditorField("旅行日期", draft.dateRange, !saving) { draft = draft.copy(dateRange = it) }
                         EditorField("目的地", draft.destination, !saving) { draft = draft.copy(destination = it) }
                     }
                 }
@@ -118,6 +120,7 @@ internal fun TripEditor(
                         Text("全程信息", style = MaterialTheme.typography.titleMedium)
                         EditableList("美食推荐", draft.foodRecommendations, !saving) { draft = draft.copy(foodRecommendations = it) }
                         EditableList("注意事项", draft.precautions, !saving) { draft = draft.copy(precautions = it) }
+                        EditableList("待办事项", draft.todos, !saving) { draft = draft.copy(todos = it) }
                         EditableList("必带物品", draft.packingItems, !saving) { draft = draft.copy(packingItems = it) }
                     }
                 }
@@ -142,6 +145,7 @@ internal fun TripEditor(
                                         }
                                         EditorField("地点名称", stop.name, !saving, requestFocus = newStop == (dayIndex to stopIndex),
                                             onFocusHandled = { newStop = null }) { updateStop(stop.renameForEdit(it)) }
+                                        EditorField("Google 地图地址", stop.googleAddress, !saving) { updateStop(stop.copy(googleAddress = it)) }
                                         EditorField("时间", stop.time, !saving) { updateStop(stop.copy(time = it)) }
                                         EditorField("类别", stop.category, !saving) { updateStop(stop.copy(category = it)) }
                                         EditorField("安排与备注", stop.note, !saving) { updateStop(stop.copy(note = it)) }
@@ -155,6 +159,7 @@ internal fun TripEditor(
                                     }) { Text("添加地点") }
                                     EditableList("美食推荐", day.foodRecommendations, !saving) { updateDay(dayIndex, day.copy(foodRecommendations = it)) }
                                     EditableList("注意事项", day.precautions, !saving) { updateDay(dayIndex, day.copy(precautions = it)) }
+                                    EditableList("待办事项", day.todos, !saving) { updateDay(dayIndex, day.copy(todos = it)) }
                                     EditableList("必带物品", day.packingItems, !saving) { updateDay(dayIndex, day.copy(packingItems = it)) }
                                     TextButton(enabled = !saving, onClick = {
                                         draft = draft.copy(days = draft.days.filterIndexed { index, _ -> index != dayIndex })

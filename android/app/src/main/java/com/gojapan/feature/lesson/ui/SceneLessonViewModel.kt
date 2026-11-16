@@ -96,10 +96,8 @@ class SceneLessonViewModel @Inject constructor(
         val next = engine!!.advance(current)
         mutableState.update { it.copy(phase = if (next.completed) LessonPhase.RESULT else LessonPhase.PLAYING, engine = next) }
         if (next.completed) {
-            val ids = checkNotNull(mutableState.value.lesson).expressions.mapTo(mutableSetOf()) { it.id }
             val results = next.evidence.mapValues { it.value.recentResults }
             viewModelScope.launch {
-                library.enrollReview(ids)
                 library.recordLessonResults(results)
                 library.recordLessonCompletion(
                     checkNotNull(mutableState.value.lesson).id,
