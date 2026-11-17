@@ -54,7 +54,7 @@ data class Draft(val id: String = UUID.randomUUID().toString(), val day: String 
     suspend fun request(turns: List<AiChatTurn>): String {
         val today = LocalDate.now().toString()
         return client.complete(turns,
-            "从用户文字提取消费。今天是 $today。只返回 JSON 数组，每笔字段 day(YYYY-MM-DD，未提及用今天)、purpose、category（从 $categories 选）、currency（明确的 ISO 4217 代码）、amount（十进制金额）。金额或币种不明确时填空字符串，不猜测。无消费返回 []。", 2048)
+            "从用户文字提取消费。今天是 $today。只返回 JSON 数组，每笔字段 day(YYYY-MM-DD，未提及用今天)、purpose、category（从 $categories 选）、currency（明确的 ISO 4217 代码）、amount（十进制金额）。未提及币种时使用 CNY，明确指定的币种照录。金额不明确时填空字符串。根据后续要求修订并返回完整结果。无消费返回 []。", 2048)
     }
     fun parseAnswer(answer: String): List<Draft> {
         val today = LocalDate.now().toString()
@@ -62,7 +62,7 @@ data class Draft(val id: String = UUID.randomUUID().toString(), val day: String 
         return Json.parseToJsonElement(body).jsonArray.map { item ->
             fun field(name: String) = item.jsonObject[name]?.jsonPrimitive?.contentOrNull.orEmpty()
             Draft(day = field("day").ifBlank { today }, purpose = field("purpose"), category = field("category").takeIf { it in categories } ?: "其他",
-                currency = field("currency"), amount = field("amount"))
+                currency = field("currency").trim().uppercase(Locale.ROOT).ifBlank { "CNY" }, amount = field("amount"))
         }.also { require(it.isNotEmpty()) { "未识别到支出，请补充消费内容" } }
     }
 }

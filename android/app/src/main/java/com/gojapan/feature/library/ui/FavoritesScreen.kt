@@ -113,9 +113,8 @@ private fun LibraryCard(
         if (!started) android.widget.Toast.makeText(context, "请检查系统是否已安装日语语音包", android.widget.Toast.LENGTH_SHORT).show()
     }
     Card(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton({ checkPlayback(speaker.playExpression(expression)) }) { Text("播放整句") }
             val words = androidx.compose.runtime.remember(expression.japanese) {
                 val iterator = android.icu.text.BreakIterator.getWordInstance(java.util.Locale.JAPANESE)
                 iterator.setText(expression.japanese)
@@ -130,19 +129,18 @@ private fun LibraryCard(
                     }
                 }
             }
-            Row(Modifier.horizontalScroll(rememberScrollState())) {
-                words.forEach { word -> androidx.compose.material3.TextButton({ checkPlayback(speaker.playWord(word)) }) { Text(word) } }
-            }
             Text(expression.japanese, style = MaterialTheme.typography.titleLarge)
             Text("${expression.kana} · ${expression.chinese}")
             Text("${expression.scene} · ${expression.politeness}", style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton({ checkPlayback(speaker.playExpression(expression)) }) { Text("播放整句") }
                 if (favoriteActionState != null) {
                     Button(onClick = onToggleFavorite) {
                         Text(if (favoriteActionState) "取消收藏" else "转为收藏")
                     }
                 }
                 OutlinedButton(onClick = onRemoveOrHide) { Text(removeLabel) }
+                words.forEach { word -> androidx.compose.material3.TextButton({ checkPlayback(speaker.playWord(word)) }) { Text(word) } }
             }
         }
     }

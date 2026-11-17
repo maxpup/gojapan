@@ -3,6 +3,7 @@ package com.gojapan.feature.trip.ui
 import com.gojapan.app.preview.GoJapanPreview
 import com.gojapan.app.preview.GoJapanPreviews
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.foundation.layout.Arrangement
@@ -210,12 +213,11 @@ private fun TripContent(
                         LazyColumn(
                             Modifier.weight(1f), contentPadding = PaddingValues(bottom = 80.dp),
                         ) {
-                            if (sectionTab == null) item(key = "saved-guides") { SavedTripGuides() }
                             if (sectionTab == null && day == null) {
                                 item { SectionTitle("行程概览") }
                                 itemsIndexed(plan.days) { index, entry ->
                                     androidx.compose.runtime.key(entry, index) {
-                                        SwipeDeleteRow(enabled, onDelete = {
+                                        SwipeDeleteRow(enabled, "${entry.date} · ${entry.title}（含当天全部安排）", onDelete = {
                                             delete(plan.copy(days = plan.days.filterIndexed { i, _ -> i != index }))
                                         }) {
                                             Card(onClick = { onSelectDay(index) },
@@ -247,31 +249,39 @@ private fun TripContent(
                                 item { SectionTitle("行程安排") }
                                 itemsIndexed(day.stops) { index, stop ->
                                     androidx.compose.runtime.key(stop, index) {
-                                        SwipeDeleteRow(enabled, onDelete = {
+                                        SwipeDeleteRow(enabled, stop.name, onDelete = {
                                             delete(plan.copy(days = plan.days.mapIndexed { i, d ->
                                                 if (i == dayIndex) d.copy(stops = d.stops.filterIndexed { j, _ -> j != index }) else d
                                             }))
                                         }) {
-                                            var editAddress by remember { mutableStateOf(false) }
+                                            var editingStop by remember { mutableStateOf(false) }
                                             StopCard(stop, index, index == state.selectedStop) {
                                                 onSelectStop(index)
-                                                editAddress = enabled
+                                                editingStop = enabled
                                             }
-                                            if (editAddress) {
-                                                var address by remember(stop) { mutableStateOf(stop.googleAddress) }
-                                                AlertDialog(onDismissRequest = { editAddress = false },
-                                                    title = { Text(stop.name) },
-                                                    text = { OutlinedTextField(address, { address = it }, label = { Text("Google 地图地址") }) },
-                                                    confirmButton = { Button(enabled = enabled, onClick = {
+                                            if (editingStop) {
+                                                var name by rememberSaveable { mutableStateOf(stop.name) }
+                                                var time by rememberSaveable { mutableStateOf(stop.time) }
+                                                var address by rememberSaveable { mutableStateOf(stop.googleAddress) }
+                                                AlertDialog(onDismissRequest = { editingStop = false },
+                                                    title = { Text("编辑行程项") },
+                                                    text = {
+                                                        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                            OutlinedTextField(time, { time = it }, singleLine = true, label = { Text("时间（选填）") })
+                                                            OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("地点名称") })
+                                                            OutlinedTextField(address, { address = it }, label = { Text("Google 地图地址") })
+                                                        }
+                                                    },
+                                                    confirmButton = { Button(enabled = enabled && name.isNotBlank(), onClick = {
                                                         scope.launch {
                                                             val stops = day.stops.toMutableList()
-                                                            stops[index] = stop.copy(googleAddress = address.trim())
+                                                            stops[index] = stop.copy(name = name.trim(), time = time.trim(), googleAddress = address.trim())
                                                             val days = plan.days.toMutableList()
                                                             days[dayIndex] = day.copy(stops = stops)
-                                                            if (save(plan.copy(days = days))) editAddress = false
+                                                            if (save(plan.copy(days = days))) editingStop = false
                                                         }
                                                     }) { Text("保存") } },
-                                                    dismissButton = { TextButton({ editAddress = false }) { Text("取消") } })
+                                                    dismissButton = { TextButton({ editingStop = false }) { Text("取消") } })
                                             }
                                         }
                                     }
@@ -289,6 +299,11 @@ private fun TripContent(
                             listOf(sectionTab ?: TripNoteSection.Packing).forEach { section ->
                                 item {
                                     InlineNoteCard(section, plan.noteEntries(section, dayIndex), enabled,
+                                        onEdit = { entry, value ->
+                                            save(plan.changeNotes(section, entry.dayIndex) { notes ->
+                                                notes.toMutableList().also { it[entry.itemIndex] = if (entry.text.startsWith("☑ ")) "☑ $value" else value }
+                                            })
+                                        },
                                         onToggle = { entry -> scope.launch {
                                             save(plan.changeNotes(section, entry.dayIndex) { notes ->
                                                 notes.mapIndexed { i, text ->
@@ -319,7 +334,7 @@ private fun TripContent(
                         TripMapPane(day.stops, state.selectedStop, state.mapProvider, onSelectMapProvider,
                             onSelectStop, Modifier.weight(1f).fillMaxHeight())
                     }
-                    Column(Modifier.width(64.dp).verticalScroll(rememberScrollState()).selectableGroup(),
+                    Column(Modifier.width(40.dp).verticalScroll(rememberScrollState()).selectableGroup(),
                         verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf(null to "日程", TripNoteSection.Precautions to "注意事项",
                             TripNoteSection.Todos to "待办", TripNoteSection.Food to "美食").forEach { (tab, label) ->
@@ -327,8 +342,8 @@ private fun TripContent(
                             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                                 .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
                                 .selectable(selected, role = Role.Tab) { sectionTab = tab }
-                                .padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
-                                Text(label, style = MaterialTheme.typography.labelMedium)
+                                .padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                Text(label.toCharArray().joinToString("\n"), modifier = Modifier.clearAndSetSemantics { contentDescription = label }, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
@@ -344,6 +359,7 @@ private fun InlineNoteCard(
     section: TripNoteSection,
     entries: List<TripNoteEntry>,
     enabled: Boolean,
+    onEdit: suspend (TripNoteEntry, String) -> Boolean,
     onToggle: (TripNoteEntry) -> Unit,
     onDelete: (TripNoteEntry) -> Unit,
     onAdd: suspend (String) -> Boolean,
@@ -363,10 +379,21 @@ private fun InlineNoteCard(
                 style = MaterialTheme.typography.bodyMedium)
             entries.forEach { entry ->
                 androidx.compose.runtime.key(entry.dayIndex, entry.itemIndex, entry.text) {
-                    SwipeDeleteRow(enabled, onDelete = { onDelete(entry) }) {
+                    var editing by remember { mutableStateOf(false) }
+                    if (editing) {
+                        var value by rememberSaveable { mutableStateOf(entry.text.removePrefix("☑ ")) }
+                        val scope = rememberCoroutineScope()
+                        AlertDialog(onDismissRequest = { editing = false }, title = { Text("编辑待办") },
+                            text = { OutlinedTextField(value, { value = it }, label = { Text("待办内容") }) },
+                            confirmButton = { Button(enabled = enabled && value.isNotBlank(), onClick = {
+                                scope.launch { if (onEdit(entry, value.trim())) editing = false }
+                            }) { Text("保存") } },
+                            dismissButton = { TextButton({ editing = false }) { Text("取消") } })
+                    }
+                    SwipeDeleteRow(enabled, entry.text, onDelete = { onDelete(entry) }) {
                         Column(Modifier.fillMaxWidth().background(background).padding(horizontal = 20.dp, vertical = 12.dp)) {
                             entry.date?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
-                            if (section == TripNoteSection.Todos) Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (section == TripNoteSection.Todos) Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { editing = true }, verticalAlignment = Alignment.CenterVertically) {
                                 androidx.compose.material3.Checkbox(entry.text.startsWith("☑ "), { onToggle(entry) }, enabled = enabled)
                                 Text(entry.text.removePrefix("☑ "))
                             } else Text(entry.text, style = MaterialTheme.typography.bodyMedium)
@@ -386,18 +413,17 @@ private fun TripHeader(plan: TripPlan, selectedDay: Int, onSelectDay: (Int) -> U
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
             color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(16.dp),
         ) {
-            Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp)) {
-                Text(plan.tripTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${plan.days.size} 天 · ${plan.days.sumOf { it.stops.size }} 个地点",
-                        Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                    IconButton(onClick = onEdit, enabled = canEdit) {
-                        Icon(painterResource(R.drawable.ic_trip_edit), "修改日程", Modifier.size(20.dp))
-                    }
-                    if (onImportGuide != null) IconButton(onClick = onImportGuide) {
-                        Icon(painterResource(R.drawable.ic_guide_import), "攻略导入", Modifier.size(20.dp))
-                    }
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(plan.tripTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("${plan.days.size} 天 · ${plan.days.sumOf { it.stops.size }} 个地点", style = MaterialTheme.typography.bodySmall)
+                }
+                IconButton(onClick = onEdit, enabled = canEdit) {
+                    Icon(painterResource(R.drawable.ic_trip_edit), "修改日程", Modifier.size(20.dp))
+                }
+                if (onImportGuide != null) IconButton(onClick = onImportGuide) {
+                    Icon(painterResource(R.drawable.ic_guide_import), "攻略导入", Modifier.size(20.dp))
                 }
             }
         }
@@ -440,7 +466,7 @@ private fun TripTab(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun SectionTitle(title: String) {
-    Text(title, Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
+    Text(title, Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 4.dp),
         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 }
 

@@ -74,10 +74,15 @@ fun SearchScreen(
                     }
                 }
                 groups.forEach { expression ->
-                    Text(expression.japanese)
-                    Text(expression.kana + " · " + expression.chinese)
-                    val saved = expression.id in library.favoriteIds
-                    androidx.compose.material3.TextButton({ libraryViewModel.saveGroup(expression) }, enabled = !saved) { Text(if (saved) "已收藏" else "收藏此句") }
+                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(expression.japanese)
+                            Text(expression.kana + " · " + expression.chinese)
+                            val saved = expression.id in library.favoriteIds
+                            androidx.compose.material3.TextButton({ libraryViewModel.saveGroup(expression) }, enabled = !saved) { Text(if (saved) "已收藏" else "收藏此句") }
+                        }
+                    }
                 }
                 androidx.compose.material3.TextButton({ groupsOpen = false }) { Text("关闭") }
             }
@@ -97,7 +102,7 @@ fun SearchScreen(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.primaryContainer,
         ) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
                 OutlinedTextField(
@@ -109,11 +114,9 @@ fun SearchScreen(
                     label = { Text("输入中文或日语") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submit() }),
-                    trailingIcon = {
-                        if (query.isNotBlank()) androidx.compose.material3.TextButton(onClick = submit) { Text("AI 解析") }
-                    },
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (query.isNotBlank()) androidx.compose.material3.TextButton(onClick = submit) { Text("AI 解析") }
                     androidx.compose.material3.TextButton(onClick = { groupsOpen = true }) { Text("AI 生成句组") }
                     androidx.compose.material3.TextButton(onClick = onOpenScenes) { Text("场景学习") }
                     androidx.compose.material3.TextButton(onClick = onOpenKana) { Text("五十音") }
@@ -123,8 +126,8 @@ fun SearchScreen(
         when {
             query.isBlank() -> com.gojapan.feature.library.ui.FavoritesRoute(viewModel = libraryViewModel, favoritesOnly = true)
             results.isEmpty() -> Column(Modifier.padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("本地词库未找到匹配表达。点搜索框里的「AI 解析」解读这段文字。")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("本地词库未找到匹配表达。点「AI 解析」解读这段文字。")
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = onOpenScenes) { Text("浏览相关旅游场景") }
                     Button(
                         onClick = {
@@ -183,30 +186,25 @@ private fun ExpressionCard(
     onSpeak: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(expression.japanese, style = MaterialTheme.typography.titleLarge)
                 Text("${expression.scene} · ${expression.politeness}", style = MaterialTheme.typography.labelMedium)
             }
             Text(expression.kana, style = MaterialTheme.typography.bodyLarge)
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                expression.kana.filterNot(Char::isWhitespace).forEachIndexed { index, kana ->
-                    AssistChip(onClick = { onKanaSpeak(kana.toString(), index) }, label = { Text(kana.toString()) })
-                }
-            }
             Text("点击单个假名可逐字点读", style = MaterialTheme.typography.labelSmall)
             if (showRomaji) Text(expression.romaji, style = MaterialTheme.typography.bodySmall)
             Text(expression.chinese, style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = onSpeak,
                     modifier = Modifier.semantics { contentDescription = "播放${expression.japanese}的日语发音" },
                 ) { Text("▶ 播放") }
                 Button(onClick = onToggleFavorite) { Text(if (isFavorite) "★ 已收藏" else "☆ 收藏") }
+                expression.kana.filterNot(Char::isWhitespace).forEachIndexed { index, kana ->
+                    AssistChip(onClick = { onKanaSpeak(kana.toString(), index) }, label = { Text(kana.toString()) })
+                }
             }
         }
     }

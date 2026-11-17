@@ -51,20 +51,27 @@ internal fun TripPlan.changeNotes(section: TripNoteSection, dayIndex: Int, chang
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun SwipeDeleteRow(enabled: Boolean, onDelete: () -> Unit, content: @Composable () -> Unit) {
-    val latestDelete by rememberUpdatedState(onDelete)
+internal fun SwipeDeleteRow(enabled: Boolean, label: String, onDelete: () -> Unit, content: @Composable () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
     val latestEnabled by rememberUpdatedState(enabled)
     val swipeState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
-            if (it == SwipeToDismissBoxValue.EndToStart && latestEnabled) latestDelete()
+            if (it == SwipeToDismissBoxValue.EndToStart && latestEnabled) confirming = true
             // Keep the item visible until its save succeeds, and reset after a failure.
             false
         },
     )
+    if (confirming) AlertDialog(
+        onDismissRequest = { confirming = false },
+        title = { Text("确认删除？") },
+        text = { Text(label) },
+        confirmButton = { TextButton(enabled = enabled, onClick = { confirming = false; onDelete() }) { Text("删除") } },
+        dismissButton = { TextButton(onClick = { confirming = false }) { Text("取消") } },
+    )
     SwipeToDismissBox(
         state = swipeState, enableDismissFromStartToEnd = false, enableDismissFromEndToStart = enabled,
         modifier = Modifier.semantics {
-            if (enabled) customActions = listOf(CustomAccessibilityAction("删除") { latestDelete(); true })
+            if (enabled) customActions = listOf(CustomAccessibilityAction("删除") { confirming = true; true })
         },
         backgroundContent = {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer).padding(20.dp),

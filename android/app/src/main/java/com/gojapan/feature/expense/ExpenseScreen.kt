@@ -1,7 +1,10 @@
 package com.gojapan.feature.expense
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.verticalScroll
+import com.gojapan.core.ai.AiChatRole
+import com.gojapan.core.ai.AiChatTurn
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,7 +34,8 @@ fun ExpenseScreen(plan: TravelPlan, model: ExpenseModel = hiltViewModel()) {
     val rows by flow.collectAsStateWithLifecycle(emptyList())
     var input by remember { mutableStateOf("") }
     var drafts by remember { mutableStateOf(emptyList<Draft>()) }
-    var conversation by remember { mutableStateOf(false) }
+    var history by remember { mutableStateOf(emptyList<AiChatTurn>()) }
+    var revision by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Expense?>(null) }
     var selected by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
@@ -49,6 +53,13 @@ fun ExpenseScreen(plan: TravelPlan, model: ExpenseModel = hiltViewModel()) {
             finally { busy = false }
         }
     }
+    suspend fun parse(text: String, previous: List<AiChatTurn>) {
+        val request = previous + AiChatTurn(AiChatRole.USER, buildJsonObject { put("request", text.trim()) }.toString())
+        val answer = model.request(request)
+        drafts = model.parseAnswer(answer)
+        history = request + AiChatTurn(AiChatRole.ASSISTANT, answer)
+        revision = ""
+    }
     val groups = rows.groupBy { it.currency }
     val currency = selected.takeIf { it in groups } ?: groups.keys.firstOrNull()
     val colors = MaterialTheme.colorScheme
@@ -61,7 +72,7 @@ fun ExpenseScreen(plan: TravelPlan, model: ExpenseModel = hiltViewModel()) {
                 val byCategory = entries.groupBy { it.category }
                 val sums = byCategory.mapValues { (_, items) -> items.sumOf { major(it.minor, currency) } }
                 val total = sums.values.fold(BigDecimal.ZERO, BigDecimal::add)
-                Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = colors.surface)) {
+                Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = colors.primaryContainer)) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (groups.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -91,7 +102,6 @@ fun ExpenseScreen(plan: TravelPlan, model: ExpenseModel = hiltViewModel()) {
                     }
                 }
             }
-            item { Text("支出明细", style = type.titleMedium, fontWeight = FontWeight.Bold) }
             if (rows.isEmpty()) item { Text("还没有支出", color = colors.onSurfaceVariant) }
             rows.groupBy { it.day }.forEach { (day, entries) ->
                 item { Text(day, style = type.labelLarge, color = colors.onSurfaceVariant) }
@@ -101,7 +111,7 @@ fun ExpenseScreen(plan: TravelPlan, model: ExpenseModel = hiltViewModel()) {
                         drafts = listOf(row.draft())
                         error = ""
                     }, enabled = !busy && drafts.isEmpty(), shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = colors.surface)) {
+                        colors = CardDefaults.cardColors(containerColor = colors.secondaryContainer)) {
                         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Column(Modifier.weight(1f)) {
                                 Text(row.purpose, style = type.titleMedium, fontWeight = FontWeight.Bold)
@@ -113,30 +123,17 @@ fun ExpenseScreen(plan: TravelPlan, model: ExpenseModel = hiltViewModel()) {
                 } }
             }
         }
-        if (conversation) {
-            androidx.compose.ui.window.Dialog(onDismissRequest = { conversation = false; drafts = emptyList() }) {
-                Surface(shape = RoundedCornerShape(24.dp)) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
-                        com.gojapan.core.ai.StructuredConversation(input, model::request, { drafts = emptyList() }) {
-                            drafts = emptyList()
-                            drafts = model.parseAnswer(it)
-                        }
-                        if (drafts.isNotEmpty()) Button({ conversation = false }) { Text("采用此结果并核对") }
-                        TextButton({ conversation = false; drafts = emptyList() }) { Text("取消") }
-                    }
-                }
-            }
-        } else if (drafts.isEmpty()) {
+        if (drafts.isEmpty()) {
             OutlinedTextField(input, { input = it }, shape = RoundedCornerShape(18.dp), enabled = !busy, label = { Text("描述支出") },
                 placeholder = { Text("今天午餐拉面 980 日元，地铁 210 日元") }, modifier = Modifier.fillMaxWidth())
             Row {
-                Button(onClick = { conversation = true }, enabled = !busy && input.isNotBlank()) { Text(if (busy) "处理中…" else "解析") }
+                Button(onClick = { perform { parse(input, emptyList()) } }, enabled = !busy && input.isNotBlank()) { Text(if (busy) "处理中…" else "解析") }
                 TextButton(onClick = { showAiSettings = true }, enabled = !busy) { Text("AI 设置") }
                 TextButton(onClick = { drafts = listOf(Draft(currency = "CNY")); error = "" }, enabled = !busy) { Text("手动记账") }
             }
             if (error.isNotBlank()) Text(error)
         } else {
-            androidx.compose.ui.window.Dialog(onDismissRequest = { if (!busy) { drafts = emptyList(); editing = null; error = "" } }) {
+            val editor: @Composable () -> Unit = {
                 Surface(shape = MaterialTheme.shapes.large) {
                     LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         item { Text(if (editing == null) "核对支出" else "编辑支出", style = MaterialTheme.typography.titleLarge) }
@@ -168,19 +165,33 @@ fun ExpenseScreen(plan: TravelPlan, model: ExpenseModel = hiltViewModel()) {
                                 if (editing == null && drafts.size > 1) TextButton({ drafts = drafts - draft }, enabled = !busy) { Text("移除本笔") }
                             }
                         } }
+                        if (history.isNotEmpty()) item {
+                            OutlinedTextField(revision, { revision = it }, enabled = !busy, shape = RoundedCornerShape(18.dp),
+                                label = { Text("补充或修改要求") })
+                            TextButton({ perform { parse(revision, history) } }, enabled = !busy && revision.isNotBlank()) { Text("重新解析") }
+                        }
                         item {
                             if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-                            Button({ perform {
-                                model.dao.save(drafts.map { it.record(plan) })
-                                if (editing == null) input = ""
-                                drafts = emptyList(); editing = null
-                            } }, enabled = !busy) { Text("保存 ${drafts.size} 笔") }
-                            TextButton({ drafts = emptyList(); editing = null; error = "" }, enabled = !busy) { Text("取消") }
-                            editing?.let { row -> TextButton({ perform { model.dao.delete(row); drafts = emptyList(); editing = null } }, enabled = !busy) { Text("删除支出") } }
+                            Row(
+                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            ) {
+                                Button({ perform {
+                                    model.dao.save(drafts.map { it.record(plan) })
+                                    if (editing == null) input = ""
+                                    history = emptyList(); revision = ""; drafts = emptyList(); editing = null
+                                } }, enabled = !busy) { Text(if (editing != null) "保存" else "保存 ${drafts.size} 笔") }
+                                TextButton({ history = emptyList(); revision = ""; drafts = emptyList(); editing = null; error = "" }, enabled = !busy) { Text("取消") }
+                                editing?.let { row -> TextButton({ perform { model.dao.delete(row); history = emptyList(); revision = ""; drafts = emptyList(); editing = null } }, enabled = !busy) { Text("删除支出") } }
+                            }
                         }
                     }
                 }
             }
+            if (history.isNotEmpty()) editor() else androidx.compose.ui.window.Dialog(onDismissRequest = {
+                if (!busy) { drafts = emptyList(); editing = null; error = "" }
+            }) { editor() }
         }
     }
 }
