@@ -193,18 +193,20 @@ private fun ExpressionCard(
                 Text("${expression.scene} · ${expression.politeness}", style = MaterialTheme.typography.labelMedium)
             }
             Text(expression.kana, style = MaterialTheme.typography.bodyLarge)
-            Text("点击单个假名可逐字点读", style = MaterialTheme.typography.labelSmall)
             if (showRomaji) Text(expression.romaji, style = MaterialTheme.typography.bodySmall)
             Text(expression.chinese, style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                expression.kana.filterNot(Char::isWhitespace).forEachIndexed { index, kana ->
+                    AssistChip(onClick = { onKanaSpeak(kana.toString(), index) }, label = { Text(kana.toString()) })
+                }
+            }
+            Text("点击单个假名可逐字点读", style = MaterialTheme.typography.labelSmall)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = onSpeak,
                     modifier = Modifier.semantics { contentDescription = "播放${expression.japanese}的日语发音" },
                 ) { Text("▶ 播放") }
                 Button(onClick = onToggleFavorite) { Text(if (isFavorite) "★ 已收藏" else "☆ 收藏") }
-                expression.kana.filterNot(Char::isWhitespace).forEachIndexed { index, kana ->
-                    AssistChip(onClick = { onKanaSpeak(kana.toString(), index) }, label = { Text(kana.toString()) })
-                }
             }
         }
     }

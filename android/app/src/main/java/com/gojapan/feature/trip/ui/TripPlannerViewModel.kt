@@ -57,7 +57,9 @@ class TripPlannerViewModel @Inject constructor(
         return try {
             repository.save(plan)
             _state.update {
-                it.copy(plan = plan, selectedDay = it.selectedDay.takeIf { index -> index in plan.days.indices } ?: -1, selectedStop = 0)
+                val dayIndex = it.selectedDay.takeIf { index -> index in plan.days.indices } ?: -1
+                val lastStop = plan.days.getOrNull(dayIndex)?.stops?.lastIndex?.coerceAtLeast(0) ?: 0
+                it.copy(plan = plan, selectedDay = dayIndex, selectedStop = it.selectedStop.coerceIn(0, lastStop))
             }
             true
         } catch (cancelled: kotlinx.coroutines.CancellationException) {

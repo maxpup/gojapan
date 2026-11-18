@@ -224,13 +224,15 @@ private fun TripContent(
                                                 shape = RoundedCornerShape(24.dp),
                                                 colors = CardDefaults.cardColors(containerColor = if (index % 2 == 0)
                                                     MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant),
-                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
-                                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Text(dateWithWeekday(entry.date), style = MaterialTheme.typography.labelLarge)
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 3.dp)) {
+                                                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                                                        Text(dateWithWeekday(entry.date), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                                                        Text("↗", Modifier.clearAndSetSemantics {}, style = MaterialTheme.typography.titleMedium)
+                                                    }
                                                     Text(entry.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                                    Text(entry.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                    Text(entry.stops.joinToString(" → ") { it.name }, style = MaterialTheme.typography.bodySmall)
-                                                    Text("展开这一天  ↗", style = MaterialTheme.typography.labelLarge)
+                                                    if (entry.summary.isNotBlank()) Text(entry.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    if (entry.stops.isNotEmpty()) Text(entry.stops.joinToString(" → ") { it.name }, style = MaterialTheme.typography.bodySmall)
                                                 }
                                             }
                                         }
@@ -260,22 +262,20 @@ private fun TripContent(
                                                 editingStop = enabled
                                             }
                                             if (editingStop) {
-                                                var name by rememberSaveable { mutableStateOf(stop.name) }
-                                                var time by rememberSaveable { mutableStateOf(stop.time) }
-                                                var address by rememberSaveable { mutableStateOf(stop.googleAddress) }
+                                                var draft by remember { mutableStateOf(stop) }
                                                 AlertDialog(onDismissRequest = { editingStop = false },
                                                     title = { Text("编辑行程项") },
                                                     text = {
                                                         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                            OutlinedTextField(time, { time = it }, singleLine = true, label = { Text("时间（选填）") })
-                                                            OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("地点名称") })
-                                                            OutlinedTextField(address, { address = it }, label = { Text("Google 地图地址") })
+                                                            OutlinedTextField(draft.time, { draft = draft.copy(time = it) }, singleLine = true, label = { Text("时间（选填）") })
+                                                            OutlinedTextField(draft.name, { draft = draft.renameForEdit(it) }, singleLine = true, label = { Text("地点名称") })
+                                                            GoogleStopSearch(draft, enabled) { draft = it }
                                                         }
                                                     },
-                                                    confirmButton = { Button(enabled = enabled && name.isNotBlank(), onClick = {
+                                                    confirmButton = { Button(enabled = enabled && draft.name.isNotBlank(), onClick = {
                                                         scope.launch {
                                                             val stops = day.stops.toMutableList()
-                                                            stops[index] = stop.copy(name = name.trim(), time = time.trim(), googleAddress = address.trim())
+                                                            stops[index] = draft.copy(name = draft.name.trim(), time = draft.time.trim(), googleAddress = draft.googleAddress.trim())
                                                             val days = plan.days.toMutableList()
                                                             days[dayIndex] = day.copy(stops = stops)
                                                             if (save(plan.copy(days = days))) editingStop = false
@@ -369,13 +369,13 @@ private fun InlineNoteCard(
         TripNoteSection.Packing -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         TripNoteSection.Todos, TripNoteSection.Precautions -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
     }
-    Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+    Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = background, contentColor = foreground)) {
-        Column(Modifier.padding(top = 16.dp, bottom = 4.dp)) {
-            Text(section.title, Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        Column(Modifier.padding(top = 8.dp, bottom = 2.dp)) {
+            Text(section.title, Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            if (entries.isEmpty()) Text("暂无内容，点击下方新增", Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            if (entries.isEmpty()) Text("暂无内容，点击下方新增", Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.bodyMedium)
             entries.forEach { entry ->
                 androidx.compose.runtime.key(entry.dayIndex, entry.itemIndex, entry.text) {
@@ -391,7 +391,7 @@ private fun InlineNoteCard(
                             dismissButton = { TextButton({ editing = false }) { Text("取消") } })
                     }
                     SwipeDeleteRow(enabled, entry.text, onDelete = { onDelete(entry) }) {
-                        Column(Modifier.fillMaxWidth().background(background).padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Column(Modifier.fillMaxWidth().background(background).padding(horizontal = 20.dp, vertical = 5.dp)) {
                             entry.date?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
                             if (section == TripNoteSection.Todos) Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { editing = true }, verticalAlignment = Alignment.CenterVertically) {
                                 androidx.compose.material3.Checkbox(entry.text.startsWith("☑ "), { onToggle(entry) }, enabled = enabled)
@@ -472,7 +472,7 @@ private fun SectionTitle(title: String) {
 
 @Composable
 private fun DayHeader(day: TripDay) {
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
         Text(day.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         Text(day.summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -481,14 +481,14 @@ private fun DayHeader(day: TripDay) {
 @Composable
 private fun StopCard(stop: TripStop, index: Int, selected: Boolean, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 3.dp),
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         ),
     ) {
-        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary) {
                 Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
                     Text("${index + 1}", color = MaterialTheme.colorScheme.onPrimary,

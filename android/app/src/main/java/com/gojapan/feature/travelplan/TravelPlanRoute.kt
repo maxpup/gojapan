@@ -116,6 +116,7 @@ fun TravelPlanRoute(content: @Composable (TravelPlan?, @Composable () -> Unit) -
                 }
             }
             panel == "list" -> Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                com.gojapan.feature.backup.BackupControls()
                 Text("我的旅行计划", style = MaterialTheme.typography.headlineSmall)
                 TextButton(onClick = { vm.form(null) }, enabled = !vm.busy) { Text("新建计划") }
                 rows.forEach { row ->
@@ -171,6 +172,7 @@ private fun PlanForm(old: TravelPlan?, vm: TravelViewModel, back: (() -> Unit)?)
     Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(if (old == null) "创建旅行计划" else "编辑旅行计划", style = MaterialTheme.typography.headlineSmall)
+        if (back == null) com.gojapan.feature.backup.BackupControls()
         fun chooseDestination(selected: String) {
             vm.clearError()
             destination = selected

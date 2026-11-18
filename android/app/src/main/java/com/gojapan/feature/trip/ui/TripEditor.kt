@@ -36,7 +36,7 @@ internal fun TripPlan.editValidationError(): String? = when {
 
 // A renamed place must not retain coordinates belonging to the previous place.
 internal fun TripStop.renameForEdit(name: String): TripStop =
-    if (name == this.name) this else copy(name = name, latitude = null, longitude = null)
+    if (name == this.name) this else copy(name = name, googleAddress = "", latitude = null, longitude = null)
 
 private val TripDraftSaver = Saver<TripPlan, String>(
     save = { Json.encodeToString(TripPlan.serializer(), it) },
@@ -145,7 +145,7 @@ internal fun TripEditor(
                                         }
                                         EditorField("地点名称", stop.name, !saving, requestFocus = newStop == (dayIndex to stopIndex),
                                             onFocusHandled = { newStop = null }) { updateStop(stop.renameForEdit(it)) }
-                                        EditorField("Google 地图地址", stop.googleAddress, !saving) { updateStop(stop.copy(googleAddress = it)) }
+                                        GoogleStopSearch(stop, !saving, ::updateStop)
                                         EditorField("时间", stop.time, !saving) { updateStop(stop.copy(time = it)) }
                                         EditorField("类别", stop.category, !saving) { updateStop(stop.copy(category = it)) }
                                         EditorField("安排与备注", stop.note, !saving) { updateStop(stop.copy(note = it)) }

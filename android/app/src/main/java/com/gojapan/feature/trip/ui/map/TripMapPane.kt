@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -122,15 +121,10 @@ private fun GoogleTripMap(points: List<TripMapPoint>, selectedIndex: Int, onSele
             CameraPosition.fromLatLngZoom(LatLng(selected.latitude, selected.longitude), 14f)
         }
     }
-    var previousSelection by remember(points) { mutableIntStateOf(selectedIndex) }
     LaunchedEffect(selectedIndex, selected.latitude, selected.longitude) {
-        if (previousSelection != selectedIndex) {
-            cameraState.position = CameraPosition.fromLatLngZoom(
-                LatLng(selected.latitude, selected.longitude),
-                14f,
-            )
-            previousSelection = selectedIndex
-        }
+        cameraState.position = CameraPosition.fromLatLngZoom(
+            LatLng(selected.latitude, selected.longitude), 14f,
+        )
     }
     Box(Modifier.fillMaxSize()) {
         GoogleMap(modifier = Modifier.fillMaxSize(), cameraPositionState = cameraState) {
@@ -142,8 +136,11 @@ private fun GoogleTripMap(points: List<TripMapPoint>, selectedIndex: Int, onSele
                 )
             }
             points.forEach { point ->
+                val markerState = remember(point.stopIndex, point.latitude, point.longitude) {
+                    MarkerState(LatLng(point.latitude, point.longitude))
+                }
                 Marker(
-                    state = MarkerState(LatLng(point.latitude, point.longitude)),
+                    state = markerState,
                     title = "${point.stopIndex + 1}. ${point.name}",
                     snippet = listOf(point.time, point.note).filter(String::isNotBlank).joinToString(" · "),
                     onClick = { onSelect(point.stopIndex); false },

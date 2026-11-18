@@ -133,6 +133,9 @@ private fun LibraryCard(
             Text("${expression.kana} · ${expression.chinese}")
             Text("${expression.scene} · ${expression.politeness}", style = MaterialTheme.typography.labelMedium)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                words.forEach { word -> androidx.compose.material3.TextButton({ checkPlayback(speaker.playWord(word)) }) { Text(word) } }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton({ checkPlayback(speaker.playExpression(expression)) }) { Text("播放整句") }
                 if (favoriteActionState != null) {
                     Button(onClick = onToggleFavorite) {
@@ -140,7 +143,6 @@ private fun LibraryCard(
                     }
                 }
                 OutlinedButton(onClick = onRemoveOrHide) { Text(removeLabel) }
-                words.forEach { word -> androidx.compose.material3.TextButton({ checkPlayback(speaker.playWord(word)) }) { Text(word) } }
             }
         }
     }
