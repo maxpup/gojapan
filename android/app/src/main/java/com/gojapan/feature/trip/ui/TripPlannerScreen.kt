@@ -396,7 +396,7 @@ private fun InlineNoteCard(
                             if (section == TripNoteSection.Todos) Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { editing = true }, verticalAlignment = Alignment.CenterVertically) {
                                 androidx.compose.material3.Checkbox(entry.text.startsWith("☑ "), { onToggle(entry) }, enabled = enabled)
                                 Text(entry.text.removePrefix("☑ "))
-                            } else Text(entry.text, style = MaterialTheme.typography.bodyMedium)
+                            } else LinkedNoteText(entry.text)
                         }
                     }
                 }
